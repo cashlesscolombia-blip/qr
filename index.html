@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>PULSE · Tickets Cashless</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<style>
+:root{
+  --bg:#0a0d18;
+  --bg2:#11162a;
+  --bg3:#1a2140;
+  --line:rgba(255,255,255,.09);
+  --text:#f1f0fb;
+  --muted:#8d92b2;
+  --pink:#ff2e7a;
+  --cyan:#22e6c5;
+  --violet:#7b5cff;
+  --amber:#ffb020;
+  --red:#ff5470;
+  --font-d:'Space Grotesk',sans-serif;
+  --font-b:'Inter',sans-serif;
+  --font-m:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--font-b);
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+button,input,select,textarea{font-family:inherit;}
+::selection{background:var(--pink);color:#fff;}
+a{color:var(--cyan);}
+
+/* ---------- Fondo evento / concierto cashless ---------- */
+.stage-bg{
+  position:fixed; inset:0; z-index:-2;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255,46,122,.28), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 15% 10%, rgba(123,92,255,.22), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 15%, rgba(34,230,197,.18), transparent 60%),
+    linear-gradient(180deg,#050710 0%, #0a0d18 40%, #0a0d18 100%);
+}
+.crowd{
+  position:fixed; left:0; right:0; bottom:0; height:38vh; z-index:-1;
+  display:flex; align-items:flex-end; gap:2px; padding:0 2px;
+  opacity:.55; filter:blur(.3px);
+}
+.crowd i{
+  flex:1; min-width:2px; background:linear-gradient(180deg, rgba(20,15,35,.9), rgba(5,5,12,1));
+  border-radius:2px 2px 0 0;
+  animation:bob 2.6s ease-in-out infinite;
+}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.beams{position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;}
+.beam{
+  position:absolute; top:-10%; width:2px; height:120%;
+  background:linear-gradient(180deg, rgba(255,255,255,0), var(--c) 35%, rgba(255,255,255,0));
+  opacity:.16; transform-origin:top center;
+  animation:sway 7s ease-in-out infinite;
+}
+@keyframes sway{0%,100%{transform:rotate(var(--a1))}50%{transform:rotate(var(--a2))}}
+@media (prefers-reduced-motion: reduce){
+  .crowd i, .beam{animation:none !important;}
+}
+
+/* ---------- layout ---------- */
+#app{position:relative; min-height:100vh; display:flex; flex-direction:column;}
+.wrap{max-width:1180px; margin:0 auto; width:100%; padding:0 20px;}
+
+.topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px; border-bottom:1px solid var(--line);
+  background:rgba(10,13,24,.6); backdrop-filter:blur(10px);
+  position:sticky; top:0; z-index:40;
+}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--font-d); font-weight:700; letter-spacing:.02em;}
+.brand .mark{
+  width:34px;height:34px;border-radius:9px;
+  background:conic-gradient(from 220deg, var(--pink), var(--violet), var(--cyan), var(--pink));
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-d); font-weight:700; font-size:15px; color:#0a0d18;
+  box-shadow:0 0 24px rgba(255,46,122,.45);
+}
+.brand span.tag{font-size:11px; color:var(--muted); font-family:var(--font-m); font-weight:400; letter-spacing:.08em; display:block; margin-top:1px;}
+.brand-txt{display:flex; flex-direction:column;}
+.pillnav{display:flex; gap:8px; align-items:center;}
+.btn{
+  border:1px solid var(--line); background:var(--bg3); color:var(--text);
+  padding:9px 16px; border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:600;
+  transition:.15s; white-space:nowrap;
+}
+.btn:hover{border-color:rgba(255,255,255,.25); transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn-ghost{background:transparent;}
+.btn-primary{background:linear-gradient(135deg,var(--pink),var(--violet)); border:none; box-shadow:0 4px 20px rgba(255,46,122,.3);}
+.btn-cyan{background:linear-gradient(135deg,var(--cyan),#0fb894); border:none; color:#04140f; box-shadow:0 4px 20px rgba(34,230,197,.25);}
+.btn-sm{padding:6px 11px; font-size:12px; border-radius:8px;}
+.btn-danger{background:rgba(255,84,112,.12); border-color:rgba(255,84,112,.4); color:#ffb3c1;}
+.btn:disabled{opacity:.4; cursor:not-allowed; transform:none;}
+
+main{flex:1; padding:36px 0 80px;}
+
+/* ---------- hero / role select ---------- */
+.hero{text-align:center; padding:40px 20px 10px;}
+.hero .eyebrow{
+  font-family:var(--font-m); font-size:12px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--cyan); display:inline-flex; align-items:center; gap:8px; margin-bottom:18px;
+}
+.hero .eyebrow::before, .hero .eyebrow::after{content:''; width:22px; height:1px; background:currentColor; opacity:.5;}
+.hero h1{
+  font-family:var(--font-d); font-size:clamp(34px,6vw,60px); line-height:1.02; margin:0 0 14px;
+  letter-spacing:-.02em;
+  background:linear-gradient(135deg,#fff 30%, var(--cyan) 70%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+}
+.hero p{color:var(--muted); max-width:520px; margin:0 auto; font-size:15.5px;}
+
+.roles{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:16px;
+  max-width:980px; margin:44px auto 0; padding:0 20px;
+}
+@media(max-width:820px){.roles{grid-template-columns:repeat(2,1fr);}}
+.role-card{
+  position:relative; border:1px solid var(--line); border-radius:18px; padding:26px 18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+  cursor:pointer; text-align:left; overflow:hidden; transition:.2s;
+}
+.role-card:hover{transform:translateY(-4px); border-color:var(--c,var(--cyan)); box-shadow:0 14px 40px -12px var(--c,var(--cyan));}
+.role-card .ico{
+  width:44px;height:44px;border-radius:12px; display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb, var(--c) 18%, transparent); color:var(--c); margin-bottom:16px; font-size:20px;
+}
+.role-card h3{font-family:var(--font-d); margin:0 0 6px; font-size:18px;}
+.role-card p{margin:0; color:var(--muted); font-size:12.5px; line-height:1.5;}
+.role-card .scanline{
+  position:absolute; left:0; right:0; height:2px; top:0;
+  background:linear-gradient(90deg, transparent, var(--c), transparent);
+  animation:scan 3.2s linear infinite; opacity:.8;
+}
+@keyframes scan{0%{top:0}100%{top:100%}}
+
+/* ---------- cards / panels ---------- */
+.panel{
+  background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+  border:1px solid var(--line); border-radius:16px; padding:22px;
+}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+.grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+@media(max-width:720px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+.field{display:flex; flex-direction:column; gap:6px; margin-bottom:14px;}
+.field label{font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.02em; text-transform:uppercase;}
+input[type=text],input[type=password],input[type=number],input[type=email],input[type=date],input[type=time],select,textarea{
+  background:var(--bg); border:1px solid var(--line); color:var(--text);
+  padding:11px 13px; border-radius:10px; font-size:14px; outline:none; transition:.15s; width:100%;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0 0 3px rgba(34,230,197,.15);}
+textarea{resize:vertical; min-height:70px;}
+.check{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); cursor:pointer;}
+.check input{width:16px;height:16px;}
+
+.center-login{max-width:420px; margin:60px auto; padding:0 20px;}
+.center-login .panel{padding:30px 26px;}
+
+.tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; border-bottom:1px solid var(--line); padding-bottom:0;}
+.tab{
+  padding:10px 16px; cursor:pointer; font-size:13.5px; font-weight:600; color:var(--muted);
+  border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap;
+}
+.tab.active{color:var(--text); border-color:var(--cyan);}
+
+.stat{
+  border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+  background:rgba(255,255,255,.02);
+}
+.stat b{display:block; font-family:var(--font-d); font-size:26px; margin-bottom:2px;}
+.stat span{font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;}
+
+table{width:100%; border-collapse:collapse; font-size:13px;}
+th{text-align:left; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap;}
+td{padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle;}
+tr:hover td{background:rgba(255,255,255,.02);}
+.table-wrap{overflow-x:auto; border-radius:12px; border:1px solid var(--line);}
+
+.badge{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:4px 9px; border-radius:100px; text-transform:uppercase; letter-spacing:.03em;}
+.badge-ok{background:rgba(34,230,197,.14); color:var(--cyan);}
+.badge-warn{background:rgba(255,176,32,.14); color:var(--amber);}
+.badge-off{background:rgba(255,84,112,.14); color:#ff8fa3;}
+.badge-mut{background:rgba(255,255,255,.08); color:var(--muted);}
+
+.modal-bg{position:fixed; inset:0; background:rgba(4,5,10,.72); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;}
+.modal{background:var(--bg2); border:1px solid var(--line); border-radius:18px; max-width:560px; width:100%; max-height:88vh; overflow:auto; padding:24px;}
+.modal h3{font-family:var(--font-d); margin:0 0 16px;}
+
+.ticket-card{
+  border:1px solid var(--line); border-radius:16px; padding:0; overflow:hidden;
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); margin-bottom:16px;
+  position:relative;
+}
+.ticket-top{padding:18px 20px; display:flex; justify-content:space-between; gap:14px; align-items:flex-start;}
+.ticket-top h4{font-family:var(--font-d); margin:0 0 4px; font-size:17px;}
+.ticket-meta{font-size:12px; color:var(--muted); line-height:1.6;}
+.ticket-div{border-top:1px dashed var(--line); position:relative;}
+.ticket-div::before,.ticket-div::after{content:'';position:absolute; top:-9px; width:18px;height:18px; background:var(--bg); border-radius:50%;}
+.ticket-div::before{left:-9px;} .ticket-div::after{right:-9px;}
+.ticket-bottom{padding:16px 20px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;}
+.qrbox{background:#fff; padding:8px; border-radius:10px; display:flex; align-items:center; justify-content:center;}
+.scan-check{
+  display:flex; align-items:center; gap:10px; color:var(--cyan); font-weight:700; font-size:13px;
+}
+.scan-check .dot{width:30px;height:30px;border-radius:50%; background:rgba(34,230,197,.15); display:flex;align-items:center;justify-content:center; font-size:15px;}
+
+.chatbox{border:1px solid var(--line); border-radius:14px; display:flex; flex-direction:column; height:420px; overflow:hidden;}
+.chat-msgs{flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px;}
+.msg{max-width:76%; padding:9px 13px; border-radius:12px; font-size:13.5px; line-height:1.4;}
+.msg.me{align-self:flex-end; background:linear-gradient(135deg,var(--pink),var(--violet)); color:#fff; border-bottom-right-radius:3px;}
+.msg.them{align-self:flex-start; background:var(--bg3); border-bottom-left-radius:3px;}
+.msg .t{font-size:10px; opacity:.65; margin-top:3px; display:block;}
+.chat-input{display:flex; gap:8px; padding:10px; border-top:1px solid var(--line);}
+.chat-input input{flex:1;}
+
+.mapwrap{border:1px solid var(--line); border-radius:16px; overflow:hidden; background:radial-gradient(ellipse at 50% 0%, #1a2140, #070811 70%); padding:30px 20px 40px;}
+.map3d{perspective:900px; display:flex; justify-content:center;}
+.floor{
+  width:min(560px,100%); transform:rotateX(52deg) rotateZ(0deg); transform-style:preserve-3d;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+}
+.stage3d{
+  width:60%; height:44px; background:linear-gradient(180deg,var(--pink),var(--violet));
+  border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:var(--font-d); font-weight:700; font-size:12px; letter-spacing:.1em;
+  box-shadow:0 0 40px rgba(255,46,122,.5); margin-bottom:6px; color:#fff;
+}
+.zonegrid{display:grid; grid-template-columns:repeat(10,1fr); gap:4px; width:92%;}
+.seat3d{aspect-ratio:1; border-radius:3px; background:var(--bg3); border:1px solid var(--line);}
+.seat3d.vip{background:linear-gradient(135deg,var(--amber),#b8790f);}
+.seat3d.palco{background:linear-gradient(135deg,var(--violet),#4a35a8);}
+.seat3d.mine{background:var(--cyan); box-shadow:0 0 10px var(--cyan); animation:pulse2 1.6s infinite;}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.5}}
+.legend{display:flex; gap:14px; flex-wrap:wrap; margin-top:14px; font-size:12px; color:var(--muted); justify-content:center;}
+.legend i{width:10px;height:10px;border-radius:3px; display:inline-block; margin-right:5px; vertical-align:-1px;}
+
+.fab-wa{
+  position:fixed; right:20px; bottom:20px; z-index:60;
+  width:56px;height:56px;border-radius:50%; background:#25D366; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 8px 24px rgba(37,211,102,.45); cursor:pointer; border:none; color:#fff; font-size:26px;
+}
+.toast-wrap{position:fixed; top:74px; right:20px; z-index:200; display:flex; flex-direction:column; gap:10px;}
+.toast{background:var(--bg2); border:1px solid var(--line); border-left:4px solid var(--cyan); padding:12px 16px; border-radius:10px; font-size:13.5px; box-shadow:0 10px 30px rgba(0,0,0,.4); animation:slidein .2s;}
+.toast.err{border-color:var(--red);}
+@keyframes slidein{from{opacity:0; transform:translateX(20px)} to{opacity:1; transform:translateX(0)}}
+
+.empty{text-align:center; padding:50px 20px; color:var(--muted);}
+.empty .ei{font-size:34px; margin-bottom:12px;}
+
+.scanner-frame{
+  max-width:340px; margin:0 auto; border-radius:20px; overflow:hidden; border:2px solid var(--cyan);
+  box-shadow:0 0 40px rgba(34,230,197,.3); position:relative; aspect-ratio:1; background:#000;
+}
+.scanner-frame video{width:100%; height:100%; object-fit:cover;}
+.scanner-frame .frame-line{position:absolute; left:6%; right:6%; height:2px; background:var(--cyan); box-shadow:0 0 10px var(--cyan); animation:scan 2.2s linear infinite;}
+
+.section-title{font-family:var(--font-d); font-size:22px; margin:0 0 4px;}
+.section-sub{color:var(--muted); font-size:13px; margin:0 0 20px;}
+.hr{height:1px; background:var(--line); margin:22px 0; border:none;}
+.small{font-size:12px; color:var(--muted);}
+.flexrow{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.spacer{flex:1;}
+.pill{padding:4px 10px; border-radius:100px; background:var(--bg3); font-size:11.5px; font-family:var(--font-m); border:1px solid var(--line);}
+.code{font-family:var(--font-m); background:var(--bg3); padding:2px 7px; border-radius:6px; font-size:12px; letter-spacing:.03em;}
+::-webkit-scrollbar{width:9px; height:9px;} ::-webkit-scrollbar-thumb{background:var(--bg3); border-radius:6px;}
+.hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<div class="stage-bg"></div>
+<div class="crowd" id="crowd"></div>
+<div class="beams" id="beams"></div>
+
+<div id="app"></div>
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+/* =========================================================
+   PULSE — App de Tickets Cashless (Usuario / Admin / QR / VT)
+   Persistencia: localStorage (prototipo sin backend)
+   ========================================================= */
+
+/* ---------- fondo decorativo ---------- */
+(function bg(){
+  const crowd=document.getElementById('crowd');
+  let h='';
+  for(let i=0;i<90;i++){
+    const height=20+Math.random()*70;
+    const delay=(Math.random()*2).toFixed(2);
+    h+=`<i style="height:${height}%;animation-delay:${delay}s"></i>`;
+  }
+  crowd.innerHTML=h;
+  const beams=document.getElementById('beams');
+  const colors=['var(--pink)','var(--cyan)','var(--violet)'];
+  let b='';
+  for(let i=0;i<6;i++){
+    const left=10+i*15;
+    const a1=(-18+Math.random()*8).toFixed(1);
+    const a2=(10+Math.random()*10).toFixed(1);
+    b+=`<div class="beam" style="left:${left}%; --c:${colors[i%3]}; --a1:${a1}deg; --a2:${a2}deg; animation-delay:${(i*0.4).toFixed(1)}s"></div>`;
+  }
+  beams.innerHTML=b;
+})();
+
+/* ---------- utilidades ---------- */
+const uid=(p='ID')=>p+'-'+Math.random().toString(36).slice(2,7).toUpperCase()+Date.now().toString(36).slice(-3).toUpperCase();
+const money=(n)=>'$'+Number(n||0).toLocaleString('es-CO');
+const nowTime=()=>new Date().toLocaleString('es-CO',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit',year:'numeric'});
+function toast(msg, err=false){
+  const w=document.getElementById('toastWrap');
+  const t=document.createElement('div');
+  t.className='toast'+(err?' err':'');
+  t.textContent=msg;
+  w.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0'; t.style.transform='translateX(20px)'; t.style.transition='.3s'; setTimeout(()=>t.remove(),300);},2800);
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- base de datos (localStorage) ---------- */
+const DB_KEY='pulse_cashless_db_v1';
+function loadDB(){
+  let db=localStorage.getItem(DB_KEY);
+  if(db) return JSON.parse(db);
+  db={
+    adminPass:'1234',
+    events:[],
+    tickets:[],
+    qrUsers:[],
+    vtUsers:[],
+    chats:[] // {id, ticketId, eventoId, hilo, autor, rol, texto, hora}
+  };
+  seed(db);
+  saveDB(db);
+  return db;
+}
+function saveDB(db){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function seed(db){
+  const ev={
+    id:uid('EVT'), nombre:'PULSE FEST 2026', codigo:'PULSE26',
+    fecha:'2026-11-14', hora:'20:00', capacidad:200,
+    createdAt:Date.now(), estado:'activo'
+  };
+  db.events.push(ev);
+  db.qrUsers.push({id:uid('QR'), nombre:'QR1', password:'1111', eventoId:ev.id});
+  db.vtUsers.push({id:uid('VT'), nombre:'VT1', password:'2222', eventoId:ev.id, ilimitado:true, cuota:0, vendidos:0});
+  const demo={
+    id:uid('TCK'), eventoId:ev.id, eventoCodigo:ev.codigo, orden:1,
+    fechaCreacion:nowTime(), nombreCliente:'María Gómez', documento:'1005223344', correo:'maria@correo.com',
+    categoria:'General', precio:120000, ubicacion:{tipo:'General', numero:'G-014'},
+    vt:'VT1', tipoPago:'Transferencia', estado:'activo', escaneado:false, horaEscaneo:null, qrScanner:null
+  };
+  db.tickets.push(demo);
+}
+let DB=loadDB();
+function persist(){ saveDB(DB); }
+
+/* ---------- categorías / config ---------- */
+const CATEGORIAS=['General','VIP','Palco Numerado','Patrocinadores','Invitados Especiales','Otro'];
+const CATS_GRATIS=['Patrocinadores','Invitados Especiales'];
+
+/* ---------- sesión ---------- */
+let SESSION={ role:null, data:null }; // role: user|admin|qr|vt
+
+/* ---------- router ---------- */
+const app=document.getElementById('app');
+function go(view){ SESSION.view=view; render(); }
+function render(){
+  app.innerHTML='';
+  if(!SESSION.role) return renderHome();
+  if(SESSION.role==='user') return renderUser();
+  if(SESSION.role==='admin') return renderAdmin();
+  if(SESSION.role==='qr') return renderQR();
+  if(SESSION.role==='vt') return renderVT();
+}
+function logout(){ SESSION={role:null,data:null}; render(); }
+
+function topbar(title,sub,color){
+  const bar=document.createElement('div');
+  bar.className='topbar';
+  bar.innerHTML=`
+    <div class="brand">
+      <div class="mark">P</div>
+      <div class="brand-txt">${esc(title)}<span class="tag">${esc(sub)}</span></div>
+    </div>
+    <div class="pillnav">
+      <span class="pill" style="border-color:${color||'var(--line)'}">${esc(SESSION.role?.toUpperCase()||'')}</span>
+      <button class="btn btn-ghost btn-sm" id="btnLogout">Salir</button>
+    </div>`;
+  bar.querySelector('#btnLogout').onclick=logout;
+  app.appendChild(bar);
+}
+
+/* =========================================================
+   HOME — Selector de interfaz
+   ========================================================= */
+function renderHome(){
+  const main=document.createElement('div');
+  main.innerHTML=`
+    <div class="topbar">
+      <div class="brand"><div class="mark">P</div>
+        <div class="brand-txt">PULSE<span class="tag">TICKETING · CASHLESS</span></div>
+      </div>
+      <div class="pillnav"><span class="small">Sistema de entradas y pulseras cashless</span></div>
+    </div>
+    <main>
+      <div class="hero">
+        <div class="eyebrow">Acceso a la plataforma</div>
+        <h1>Tu entrada, tu pulsera,<br>tu experiencia.</h1>
+        <p>Elige tu interfaz para continuar. Cada rol tiene su propio acceso y funciones dentro del evento.</p>
+      </div>
+      <div class="roles" id="roles"></div>
+    </main>`;
+  app.appendChild(main);
+
+  const roles=[
+    {k:'user',c:'var(--cyan)',ico:'🎟️',t:'Usuario',d:'Consulta tus tickets, estado de escaneo, chat con el admin y ubicación en el mapa del evento.'},
+    {k:'admin',c:'var(--pink)',ico:'🛠️',t:'Admin',d:'Crea eventos, genera tickets, gestiona vendedores (VT) y puntos de ingreso (QR).'},
+    {k:'qr',c:'var(--violet)',ico:'📷',t:'Punto QR',d:'Escanea entradas en el punto de ingreso y valida su autenticidad en tiempo real.'},
+    {k:'vt',c:'var(--amber)',ico:'💳',t:'Vendedor VT',d:'Vende y asigna tickets dentro de tu cupo asignado por el administrador.'},
+  ];
+  document.getElementById('roles').innerHTML=roles.map(r=>`
+    <div class="role-card" style="--c:${r.c}" data-role="${r.k}">
+      <div class="scanline"></div>
+      <div class="ico">${r.ico}</div>
+      <h3>${r.t}</h3>
+      <p>${r.d}</p>
+    </div>`).join('');
+  document.querySelectorAll('.role-card').forEach(c=>{
+    c.onclick=()=>openLogin(c.dataset.role);
+  });
+}
+
+function openLogin(role){
+  const bg=document.createElement('div');
+  bg.className='modal-bg';
+  const titles={user:'Acceso Usuario',admin:'Acceso Administrador',qr:'Acceso Punto QR',vt:'Acceso Vendedor VT'};
+  let body='';
+  if(role==='user'){
+    body=`
+      <div class="field"><label>Cédula o correo registrado en tu ticket</label>
+        <input type="text" id="loginVal" placeholder="Ej: 1005223344 o maria@correo.com"></div>
+      <button class="btn btn-cyan" id="doLogin" style="width:100%">Ver mis tickets</button>
+      <p class="small" style="margin-top:12px">Dato de ejemplo: <b>maria@correo.com</b></p>`;
+  } else if(role==='admin'){
+    body=`
+      <div class="field"><label>Clave de administrador</label>
+        <input type="password" id="loginVal" placeholder="••••"></div>
+      <button class="btn btn-primary" id="doLogin" style="width:100%">Entrar al panel</button>
+      <p class="small" style="margin-top:12px">Clave demo: <b>1234</b></p>`;
+  } else if(role==='qr'){
+    body=`
+      <div class="field"><label>Usuario (Ej: QR1)</label><input type="text" id="loginUser" placeholder="QR1"></div>
+      <div class="field"><label>Contraseña</label><input type="password" id="loginVal" placeholder="••••"></div>
+      <button class="btn" style="width:100%;background:linear-gradient(135deg,var(--violet),#4a35a8);border:none" id="doLogin">Entrar a escanear</button>
+      <p class="small" style="margin-top:12px">Demo: <b>QR1</b> / <b>1111</b></p>`;
+  } else if(role==='vt'){
+    body=`
+      <div class="field"><label>Usuario (Ej: VT1)</label><input type="text" id="loginUser" placeholder="VT1"></div>
+      <div class="field"><label>Contraseña</label><input type="password" id="loginVal" placeholder="••••"></div>
+      <button class="btn" style="width:100%;background:linear-gradient(135deg,var(--amber),#b8790f);border:none;color:#241800" id="doLogin">Entrar a vender</button>
+      <p class="small" style="margin-top:12px">Demo: <b>VT1</b> / <b>2222</b></p>`;
+  }
+  bg.innerHTML=`<div class="modal" style="max-width:400px">
+      <h3>${titles[role]}</h3>
+      ${body}
+      <button class="btn btn-ghost" id="closeModal" style="width:100%;margin-top:10px">Cancelar</button>
+    </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#closeModal').onclick=()=>bg.remove();
+  bg.onclick=(e)=>{ if(e.target===bg) bg.remove(); };
+  bg.querySelector('#doLogin').onclick=()=>{
+    const val=bg.querySelector('#loginVal').value.trim();
+    if(role==='user'){
+      if(!val) return toast('Ingresa tu cédula o correo',true);
+      const mine=DB.tickets.filter(t=>t.documento===val || (t.correo||'').toLowerCase()===val.toLowerCase());
+      if(!mine.length) return toast('No encontramos tickets con ese dato',true);
+      SESSION={role:'user', data:{key:val}};
+      bg.remove(); render();
+    } else if(role==='admin'){
+      if(val!==DB.adminPass) return toast('Clave incorrecta',true);
+      SESSION={role:'admin', data:{}};
+      bg.remove(); render();
+    } else if(role==='qr'){
+      const user=bg.querySelector('#loginUser').value.trim();
+      const found=DB.qrUsers.find(q=>q.nombre.toLowerCase()===user.toLowerCase() && q.password===val);
+      if(!found) return toast('Usuario o contraseña incorrectos',true);
+      SESSION={role:'qr', data:found};
+      bg.remove(); render();
+    } else if(role==='vt'){
+      const user=bg.querySelector('#loginUser').value.trim();
+      const found=DB.vtUsers.find(v=>v.nombre.toLowerCase()===user.toLowerCase() && v.password===val);
+      if(!found) return toast('Usuario o contraseña incorrectos',true);
+      SESSION={role:'vt', data:found};
+      bg.remove(); render();
+    }
+  };
+}
+
+/* =========================================================
+   USUARIO
+   ========================================================= */
+function renderUser(){
+  topbar('PULSE','MIS TICKETS','var(--cyan)');
+  const key=SESSION.data.key;
+  const mine=DB.tickets.filter(t=>t.documento===key || (t.correo||'').toLowerCase()===key.toLowerCase())
+    .sort((a,b)=>a.orden-b.orden);
+
+  const main=document.createElement('main');
+  main.innerHTML=`<div class="wrap">
+    <div class="section-title">Hola 👋</div>
+    <p class="section-sub">Estos son tus tickets, ordenados por orden y hora de compra.</p>
+    <div class="tabs" id="userTabs">
+      <div class="tab active" data-t="tickets">Mis tickets</div>
+      <div class="tab" data-t="mapa">Mapa del evento</div>
+      <div class="tab" data-t="chat">Chat con el admin</div>
+    </div>
+    <div id="userBody"></div>
+  </div>`;
+  app.appendChild(main);
+
+  document.querySelectorAll('#userTabs .tab').forEach(t=>t.onclick=()=>{
+    document.querySelectorAll('#userTabs .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    userBody(t.dataset.t, mine);
+  });
+  userBody('tickets', mine);
+
+  // botón flotante whatsapp
+  const fab=document.createElement('button');
+  fab.className='fab-wa'; fab.innerHTML='💬';
+  fab.title='Escribir al admin por WhatsApp';
+  fab.onclick=()=>{
+    const msg=encodeURIComponent('Hola, tengo una novedad con mi ticket del evento.');
+    window.open(`https://wa.me/573192153328?text=${msg}`,'_blank');
+  };
+  app.appendChild(fab);
+}
+
+function userBody(tab, mine){
+  const el=document.getElementById('userBody');
+  if(tab==='tickets'){
+    if(!mine.length){ el.innerHTML=`<div class="empty"><div class="ei">🎫</div>No tienes tickets asignados todavía.</div>`; return; }
+    el.innerHTML=mine.map(t=>{
+      const ev=DB.events.find(e=>e.id===t.eventoId)||{};
+      const scanned=t.escaneado;
+      return `<div class="ticket-card">
+        <div class="ticket-top">
+          <div>
+            <h4>${esc(ev.nombre||'Evento')} <span class="pill">#${t.orden}</span></h4>
+            <div class="ticket-meta">
+              ${esc(t.nombreCliente)} · Doc ${esc(t.documento||'-')}<br>
+              📅 ${esc(ev.fecha)} · ⏰ ${esc(ev.hora)}<br>
+              Categoría: <b>${esc(t.categoria)}</b> · Ubicación: <b>${esc(t.ubicacion?.tipo||'-')}${t.ubicacion?.numero?(' · '+esc(t.ubicacion.numero)):''}</b><br>
+              Comprado: ${esc(t.fechaCreacion)} · Vendedor: ${esc(t.vt||'Admin')}
+            </div>
+          </div>
+          <span class="badge ${t.estado==='activo'?'badge-ok':t.estado==='pausado'?'badge-warn':'badge-off'}">${esc(t.estado)}</span>
+        </div>
+        <div class="ticket-div"></div>
+        <div class="ticket-bottom">
+          <div class="qrbox" id="qr_${t.id}"></div>
+          ${scanned?`
+            <div class="scan-check">
+              <div class="dot">✅</div>
+              <div>Escaneado OK<br><span style="color:var(--muted);font-weight:400">🕒 ${esc(t.horaEscaneo)} · por ${esc(t.qrScanner)}</span></div>
+            </div>`:`
+            <div class="scan-check" style="color:var(--muted)">
+              <div class="dot" style="background:rgba(255,255,255,.06);color:var(--muted)">⏳</div>
+              <div>Pendiente de escaneo<br><span style="font-weight:400">Preséntalo en el punto de acceso</span></div>
+            </div>`}
+        </div>
+      </div>`;
+    }).join('');
+    mine.forEach(t=>{
+      const box=document.getElementById('qr_'+t.id);
+      if(box && window.QRCode) new QRCode(box, {text:t.id, width:78, height:78, colorDark:'#0a0d18', colorLight:'#ffffff'});
+    });
+  }
+  if(tab==='mapa'){
+    const ev=DB.events.find(e=>e.id===(mine[0]?.eventoId))||DB.events[0];
+    el.innerHTML=mapaHTML(ev, mine[0]);
+  }
+  if(tab==='chat'){
+    el.innerHTML=chatUI('user', mine[0]?.eventoId, mine[0]?.nombreCliente||'Usuario');
+    wireChat('user', mine[0]?.eventoId, mine[0]?.id || 'general');
+  }
+}
+
+function mapaHTML(ev, myTicket){
+  if(!ev) return `<div class="empty"><div class="ei">🗺️</div>No hay evento asociado.</div>`;
+  let seats='';
+  for(let i=0;i<80;i++){
+    let cls='seat3d';
+    if(i<10) cls+=' vip';
+    else if(i>=70) cls+=' palco';
+    if(myTicket && myTicket.ubicacion?.numero && ('S-'+i)===myTicket.ubicacion.numero) cls+=' mine';
+    seats+=`<div class="${cls}"></div>`;
+  }
+  return `<div class="mapwrap">
+    <div class="map3d"><div class="floor">
+      <div class="stage3d">ESCENARIO</div>
+      <div class="zonegrid">${seats}</div>
+    </div></div>
+    <div class="legend">
+      <span><i style="background:var(--amber)"></i>VIP</span>
+      <span><i style="background:var(--bg3);border:1px solid var(--line)"></i>General</span>
+      <span><i style="background:var(--violet)"></i>Palco numerado</span>
+      <span><i style="background:var(--cyan)"></i>Tu ubicación</span>
+    </div>
+    <p class="small" style="text-align:center;margin-top:10px">Mapa referencial en 3D de ${esc(ev.nombre)} · ${esc(ev.fecha)}</p>
+  </div>`;
+}
+
+/* ---------- chat genérico ---------- */
+function chatUI(role, eventoId, nombre){
+  return `<div class="chatbox">
+    <div class="chat-msgs" id="chatMsgs"></div>
+    <div class="chat-input">
+      <input type="text" id="chatInput" placeholder="Escribe un mensaje...">
+      <button class="btn btn-cyan btn-sm" id="chatSend">Enviar</button>
+    </div>
+  </div>
+  <p class="small" style="margin-top:8px">Sala de chat privada con el administrador del evento (${esc(nombre)}).</p>`;
+}
+function wireChat(role, eventoId, hilo){
+  hilo = hilo || 'general';
+  function paint(){
+    const box=document.getElementById('chatMsgs');
+    if(!box) return;
+    const msgs=DB.chats.filter(c=>c.hilo===hilo);
+    box.innerHTML=msgs.map(m=>`<div class="msg ${m.rol===role?'me':'them'}">${esc(m.texto)}<span class="t">${esc(m.autor)} · ${esc(m.hora)}</span></div>`).join('')
+      || `<p class="small" style="text-align:center;margin-top:20px">Aún no hay mensajes. Escribe el primero 👋</p>`;
+    box.scrollTop=box.scrollHeight;
+  }
+  paint();
+  const input=document.getElementById('chatInput');
+  const send=()=>{
+    const v=input.value.trim(); if(!v) return;
+    DB.chats.push({id:uid('MSG'), eventoId, hilo, autor:nombreForRole(role), rol:role, texto:v, hora:nowTime()});
+    persist(); input.value=''; paint();
+  };
+  document.getElementById('chatSend').onclick=send;
+  input.onkeydown=(e)=>{ if(e.key==='Enter') send(); };
+}
+function nombreForRole(role){
+  if(role==='admin') return 'Admin';
+  if(role==='user') return SESSION.data?.key || 'Usuario';
+  if(role==='qr') return SESSION.data?.nombre || 'QR';
+  if(role==='vt') return SESSION.data?.nombre || 'VT';
+  return role;
+}
+
+/* =========================================================
+   ADMIN
+   ========================================================= */
+let ADMIN_TAB='eventos';
+let ADMIN_EVENT=null;
+
+function renderAdmin(){
+  topbar('PULSE','PANEL ADMINISTRADOR','var(--pink)');
+  if(!ADMIN_EVENT && DB.events.length) ADMIN_EVENT=DB.events[0].id;
+  const main=document.createElement('main');
+  main.innerHTML=`<div class="wrap">
+    <div class="section-title">Panel de administración</div>
+    <p class="section-sub">Gestiona eventos, tickets, vendedores y puntos de ingreso.</p>
+    <div class="tabs" id="adminTabs">
+      <div class="tab" data-t="eventos">Eventos</div>
+      <div class="tab" data-t="tickets">Tickets</div>
+      <div class="tab" data-t="usuarios">Usuarios QR / VT</div>
+      <div class="tab" data-t="stats">Estadísticas</div>
+      <div class="tab" data-t="chat">Chat</div>
+    </div>
+    <div id="adminBody"></div>
+  </div>`;
+  app.appendChild(main);
+  document.querySelectorAll('#adminTabs .tab').forEach(t=>{
+    if(t.dataset.t===ADMIN_TAB) t.classList.add('active');
+    t.onclick=()=>{ ADMIN_TAB=t.dataset.t; renderAdmin(); };
+  });
+  const bodyFns={eventos:adminEventos, tickets:adminTickets, usuarios:adminUsuarios, stats:adminStats, chat:adminChat};
+  bodyFns[ADMIN_TAB]();
+}
+
+function adminEventos(){
+  const el=document.getElementById('adminBody');
+  el.innerHTML=`
+    <div class="panel" style="margin-bottom:20px">
+      <h3 style="margin-top:0">Crear nuevo evento</h3>
+      <div class="grid3">
+        <div class="field"><label>Nombre del evento</label><input id="evNombre" type="text" placeholder="Ej: Pulse Fest 2026"></div>
+        <div class="field"><label>Fecha</label><input id="evFecha" type="date"></div>
+        <div class="field"><label>Hora</label><input id="evHora" type="time"></div>
+      </div>
+      <div class="field" style="max-width:220px"><label>Capacidad estimada</label><input id="evCap" type="number" placeholder="200"></div>
+      <button class="btn btn-primary" id="crearEvento">+ Crear evento</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Evento</th><th>Código</th><th>Fecha</th><th>Tickets</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="evTbody"></tbody>
+    </table></div>`;
+  el.querySelector('#crearEvento').onclick=()=>{
+    const nombre=el.querySelector('#evNombre').value.trim();
+    const fecha=el.querySelector('#evFecha').value;
+    const hora=el.querySelector('#evHora').value;
+    const cap=Number(el.querySelector('#evCap').value)||100;
+    if(!nombre||!fecha||!hora) return toast('Completa nombre, fecha y hora',true);
+    const codigo=(nombre.replace(/[^A-Za-z0-9]/g,'').slice(0,5)+Math.floor(Math.random()*900+100)).toUpperCase();
+    DB.events.push({id:uid('EVT'), nombre, codigo, fecha, hora, capacidad:cap, estado:'activo', createdAt:Date.now()});
+    persist(); toast('Evento creado con código '+codigo); adminEventos();
+  };
+  paintEventos();
+}
+function paintEventos(){
+  const tb=document.getElementById('evTbody');
+  if(!tb) return;
+  if(!DB.events.length){ tb.innerHTML=`<tr><td colspan="6" class="small" style="text-align:center;padding:24px">Aún no hay eventos creados.</td></tr>`; return; }
+  tb.innerHTML=DB.events.map(ev=>{
+    const n=DB.tickets.filter(t=>t.eventoId===ev.id).length;
+    return `<tr>
+      <td><b>${esc(ev.nombre)}</b></td>
+      <td><span class="code">${esc(ev.codigo)}</span></td>
+      <td>${esc(ev.fecha)} · ${esc(ev.hora)}</td>
+      <td>${n}</td>
+      <td><span class="badge ${ev.estado==='activo'?'badge-ok':'badge-off'}">${esc(ev.estado)}</span></td>
+      <td>
+        <button class="btn btn-sm ${ev.estado==='activo'?'btn-danger':'btn-cyan'}" data-act="toggle" data-id="${ev.id}">
+          ${ev.estado==='activo'?'Pausar':'Activar'}
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+  tb.querySelectorAll('[data-act=toggle]').forEach(b=>b.onclick=()=>{
+    const ev=DB.events.find(e=>e.id===b.dataset.id);
+    ev.estado = ev.estado==='activo'?'pausado':'activo';
+    persist(); paintEventos();
+  });
+}
+
+function eventSelector(){
+  return `<div class="field" style="max-width:340px"><label>Evento activo de trabajo</label>
+    <select id="evSelActivo">${DB.events.map(e=>`<option value="${e.id}" ${e.id===ADMIN_EVENT?'selected':''}>${esc(e.nombre)} (${esc(e.codigo)})</option>`).join('')}</select>
+  </div>`;
+}
+
+let TICKET_SUBTAB='listado';
+function adminTickets(){
+  const el=document.getElementById('adminBody');
+  if(!DB.events.length){ el.innerHTML=`<div class="empty"><div class="ei">🎪</div>Primero crea un evento en la pestaña "Eventos".</div>`; return; }
+  el.innerHTML=`
+    ${eventSelector()}
+    <div class="tabs" style="margin-top:10px" id="tSub">
+      <div class="tab" data-s="listado">Listado</div>
+      <div class="tab" data-s="individual">Crear individual</div>
+      <div class="tab" data-s="masivo">Crear masivo</div>
+      <div class="tab" data-s="excel">Importar Excel</div>
+    </div>
+    <div id="ticketBody"></div>`;
+  el.querySelector('#evSelActivo').onchange=(e)=>{ ADMIN_EVENT=e.target.value; adminTickets(); };
+  el.querySelectorAll('#tSub .tab').forEach(t=>{
+    if(t.dataset.s===TICKET_SUBTAB) t.classList.add('active');
+    t.onclick=()=>{ TICKET_SUBTAB=t.dataset.s; adminTickets(); };
+  });
+  const fns={listado:ticketListado, individual:ticketIndividual, masivo:ticketMasivo, excel:ticketExcel};
+  fns[TICKET_SUBTAB]();
+}
+
+function ubicacionFields(prefix){
+  return `<div class="field"><label>Ubicación</label>
+    <select id="${prefix}Ubic">
+      <option value="Palco Numerado">Palco numerado</option>
+      <option value="VIP">VIP</option>
+      <option value="General" selected>General</option>
+      <option value="Otro">Otro / personalizado</option>
+    </select></div>
+    <div class="field" id="${prefix}UbicExtraWrap"><label id="${prefix}UbicExtraLabel">Número de silla (opcional)</label>
+      <input id="${prefix}UbicExtra" type="text" placeholder="Ej: G-014"></div>`;
+}
+function wireUbicacion(prefix){
+  const sel=document.getElementById(prefix+'Ubic');
+  const label=document.getElementById(prefix+'UbicExtraLabel');
+  sel.onchange=()=>{
+    const v=sel.value;
+    if(v==='Palco Numerado') label.textContent='Número de palco / silla';
+    else if(v==='VIP') label.textContent='Referencia de zona VIP (opcional)';
+    else if(v==='General') label.textContent='Número de silla (opcional, ver mapa)';
+    else label.textContent='Descripción de ubicación';
+  };
+}
+
+function ticketIndividual(){
+  const el=document.getElementById('ticketBody');
+  el.innerHTML=`<div class="panel">
+    <h3 style="margin-top:0">Crear ticket individual</h3>
+    <div class="grid2">
+      <div class="field"><label>Nombre del cliente</label><input id="tiNombre" type="text"></div>
+      <div class="field"><label>Cédula</label><input id="tiDoc" type="text"></div>
+      <div class="field"><label>Correo electrónico</label><input id="tiCorreo" type="email"></div>
+      <div class="field"><label>Categoría</label>
+        <select id="tiCat">${CATEGORIAS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+      ${ubicacionFields('ti')}
+      <div class="field"><label>Precio</label><input id="tiPrecio" type="number" placeholder="120000"></div>
+      <div class="field"><label>Tipo de pago</label>
+        <select id="tiPago"><option>Efectivo</option><option>Transferencia</option></select></div>
+      <div class="field"><label>Vendedor (VT)</label>
+        <select id="tiVt"><option value="Admin">Admin (venta directa)</option>
+          ${DB.vtUsers.filter(v=>v.eventoId===ADMIN_EVENT).map(v=>`<option value="${v.nombre}">${v.nombre}</option>`).join('')}
+        </select></div>
+    </div>
+    <button class="btn btn-primary" id="crearIndividual">+ Generar ticket</button>
+  </div>`;
+  wireUbicacion('ti');
+  document.getElementById('tiCat').onchange=(e)=>{
+    if(CATS_GRATIS.includes(e.target.value)) document.getElementById('tiPrecio').value=0;
+  };
+  el.querySelector('#crearIndividual').onclick=()=>{
+    const nombre=el.querySelector('#tiNombre').value.trim();
+    const doc=el.querySelector('#tiDoc').value.trim();
+    const correo=el.querySelector('#tiCorreo').value.trim();
+    const categoria=el.querySelector('#tiCat').value;
+    const ubicTipo=el.querySelector('#tiUbic').value;
+    const ubicExtra=el.querySelector('#tiUbicExtra').value.trim();
+    let precio=Number(el.querySelector('#tiPrecio').value)||0;
+    const pago=el.querySelector('#tiPago').value;
+    const vt=el.querySelector('#tiVt').value;
+    if(!nombre||!doc) return toast('Nombre y cédula son obligatorios',true);
+    if(CATS_GRATIS.includes(categoria)) precio=0;
+    crearTicket({nombre,doc,correo,categoria,ubicTipo,ubicExtra,precio,pago,vt});
+    toast('Ticket generado para '+nombre);
+    ticketIndividual();
+  };
+}
+function crearTicket({nombre,doc,correo,categoria,ubicTipo,ubicExtra,precio,pago,vt}){
+  const ev=DB.events.find(e=>e.id===ADMIN_EVENT);
+  const orden=DB.tickets.filter(t=>t.eventoId===ADMIN_EVENT).length+1;
+  DB.tickets.push({
+    id:uid('TCK'), eventoId:ADMIN_EVENT, eventoCodigo:ev.codigo, orden,
+    fechaCreacion:nowTime(), nombreCliente:nombre, documento:doc, correo,
+    categoria, precio, ubicacion:{tipo:ubicTipo, numero:ubicExtra||null},
+    vt, tipoPago:pago, estado:'activo', escaneado:false, horaEscaneo:null, qrScanner:null
+  });
+  persist();
+}
+
+function ticketMasivo(){
+  const el=document.getElementById('ticketBody');
+  el.innerHTML=`<div class="panel">
+    <h3 style="margin-top:0">Creación masiva rápida</h3>
+    <p class="small">Genera tickets sin asignar (se completan luego con nombre y cédula desde el listado).</p>
+    <div class="grid3">
+      <div class="field"><label>Cantidad a crear</label><input id="tmCant" type="number" placeholder="50"></div>
+      <div class="field"><label>Categoría</label>
+        <select id="tmCat">${CATEGORIAS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+      <div class="field"><label>Precio unitario</label><input id="tmPrecio" type="number" placeholder="120000"></div>
+      ${ubicacionFields('tm')}
+      <div class="field"><label>Tipo de pago</label>
+        <select id="tmPago"><option>Efectivo</option><option>Transferencia</option></select></div>
+    </div>
+    <button class="btn btn-primary" id="crearMasivo">+ Generar tickets masivos</button>
+  </div>`;
+  wireUbicacion('tm');
+  el.querySelector('#crearMasivo').onclick=()=>{
+    const cant=Number(el.querySelector('#tmCant').value);
+    const categoria=el.querySelector('#tmCat').value;
+    let precio=Number(el.querySelector('#tmPrecio').value)||0;
+    if(CATS_GRATIS.includes(categoria)) precio=0;
+    const ubicTipo=el.querySelector('#tmUbic').value;
+    const pago=el.querySelector('#tmPago').value;
+    if(!cant || cant<1) return toast('Indica una cantidad válida',true);
+    const ev=DB.events.find(e=>e.id===ADMIN_EVENT);
+    let base=DB.tickets.filter(t=>t.eventoId===ADMIN_EVENT).length;
+    for(let i=1;i<=cant;i++){
+      DB.tickets.push({
+        id:uid('TCK'), eventoId:ADMIN_EVENT, eventoCodigo:ev.codigo, orden:base+i,
+        fechaCreacion:nowTime(), nombreCliente:'', documento:'', correo:'',
+        categoria, precio, ubicacion:{tipo:ubicTipo, numero:null},
+        vt:'Admin', tipoPago:pago, estado:'activo', escaneado:false, horaEscaneo:null, qrScanner:null, sinAsignar:true
+      });
+    }
+    persist(); toast(cant+' tickets generados sin asignar'); ticketMasivo();
+  };
+}
+
+function ticketExcel(){
+  const el=document.getElementById('ticketBody');
+  el.innerHTML=`<div class="panel">
+    <h3 style="margin-top:0">Importar tickets desde Excel</h3>
+    <p class="small">Columnas esperadas: <span class="code">nombre, documento, correo, categoria, ubicacion, numero, precio, pago</span></p>
+    <input type="file" id="excelFile" accept=".xlsx,.xls,.csv">
+    <div id="excelPreview" style="margin-top:14px"></div>
+  </div>`;
+  el.querySelector('#excelFile').onchange=(e)=>{
+    const file=e.target.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'binary'});
+        const sheet=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+        if(!rows.length) return toast('El archivo no tiene filas',true);
+        const evObj=DB.events.find(x=>x.id===ADMIN_EVENT);
+        let base=DB.tickets.filter(t=>t.eventoId===ADMIN_EVENT).length;
+        rows.forEach((r,i)=>{
+          let precio=Number(r.precio)||0;
+          const categoria=r.categoria||'General';
+          if(CATS_GRATIS.includes(categoria)) precio=0;
+          DB.tickets.push({
+            id:uid('TCK'), eventoId:ADMIN_EVENT, eventoCodigo:evObj.codigo, orden:base+i+1,
+            fechaCreacion:nowTime(), nombreCliente:r.nombre||'', documento:String(r.documento||''), correo:r.correo||'',
+            categoria, precio, ubicacion:{tipo:r.ubicacion||'General', numero:r.numero||null},
+            vt:'Admin', tipoPago:r.pago||'Efectivo', estado:'activo', escaneado:false, horaEscaneo:null, qrScanner:null
+          });
+        });
+        persist();
+        document.getElementById('excelPreview').innerHTML=`<div class="badge badge-ok">✔ ${rows.length} tickets importados correctamente</div>`;
+        toast(rows.length+' tickets importados');
+      }catch(err){ toast('Error leyendo el archivo: '+err.message, true); }
+    };
+    reader.readAsBinaryString(file);
+  };
+}
+
+function ticketListado(){
+  const el=document.getElementById('ticketBody');
+  const list=DB.tickets.filter(t=>t.eventoId===ADMIN_EVENT);
+  const vendidos=list.filter(t=>!t.sinAsignar).length;
+  const pendientes=list.filter(t=>t.sinAsignar).length;
+  const escaneados=list.filter(t=>t.escaneado).length;
+  const porEscanear=list.filter(t=>!t.escaneado && t.estado==='activo').length;
+  el.innerHTML=`
+    <div class="grid3" style="grid-template-columns:repeat(4,1fr); margin-bottom:18px">
+      <div class="stat"><b>${vendidos}</b><span>Vendidos / asignados</span></div>
+      <div class="stat"><b>${pendientes}</b><span>Pendientes por vender</span></div>
+      <div class="stat"><b>${escaneados}</b><span>Escaneados</span></div>
+      <div class="stat"><b>${porEscanear}</b><span>Pendientes por escanear</span></div>
+    </div>
+    <div class="flexrow" style="margin-bottom:12px">
+      <input type="text" id="buscarTk" placeholder="Buscar por nombre, cédula o correo..." style="max-width:320px">
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Cliente</th><th>Doc/Correo</th><th>Categoría</th><th>Ubicación</th><th>Precio</th><th>Pago</th><th>VT</th><th>Estado</th><th>Escaneo</th><th></th></tr></thead>
+      <tbody id="tkTbody"></tbody>
+    </table></div>`;
+  const paint=(filter='')=>{
+    const f=filter.toLowerCase();
+    const rows=list.filter(t=>!f || (t.nombreCliente||'').toLowerCase().includes(f) || (t.documento||'').includes(f) || (t.correo||'').toLowerCase().includes(f));
+    const tb=document.getElementById('tkTbody');
+    if(!rows.length){ tb.innerHTML=`<tr><td colspan="11" class="small" style="text-align:center;padding:20px">Sin resultados.</td></tr>`; return; }
+    tb.innerHTML=rows.sort((a,b)=>a.orden-b.orden).map(t=>`
+      <tr>
+        <td>${t.orden}</td>
+        <td>${t.nombreCliente?esc(t.nombreCliente):'<span class="badge badge-mut">sin asignar</span>'}</td>
+        <td class="small">${esc(t.documento||'-')}<br>${esc(t.correo||'')}</td>
+        <td>${esc(t.categoria)}</td>
+        <td>${esc(t.ubicacion?.tipo||'-')} ${t.ubicacion?.numero?('· '+esc(t.ubicacion.numero)):''}</td>
+        <td>${money(t.precio)}</td>
+        <td>${esc(t.tipoPago)}</td>
+        <td>${esc(t.vt||'-')}</td>
+        <td><span class="badge ${t.estado==='activo'?'badge-ok':t.estado==='pausado'?'badge-warn':'badge-off'}">${esc(t.estado)}</span></td>
+        <td>${t.escaneado?'<span class="badge badge-ok">✔ '+esc(t.horaEscaneo)+'</span>':'<span class="badge badge-mut">pendiente</span>'}</td>
+        <td class="flexrow">
+          <button class="btn btn-sm" data-act="edit" data-id="${t.id}">Editar</button>
+          <button class="btn btn-sm ${t.estado==='pausado'?'btn-cyan':''}" data-act="pause" data-id="${t.id}">${t.estado==='pausado'?'Reanudar':'Pausar'}</button>
+          <button class="btn btn-sm btn-danger" data-act="del" data-id="${t.id}">Anular</button>
+        </td>
+      </tr>`).join('');
+    tb.querySelectorAll('[data-act=edit]').forEach(b=>b.onclick=()=>editTicketModal(b.dataset.id));
+    tb.querySelectorAll('[data-act=pause]').forEach(b=>b.onclick=()=>{
+      const t=DB.tickets.find(x=>x.id===b.dataset.id);
+      t.estado = t.estado==='pausado'?'activo':'pausado';
+      persist(); paint(document.getElementById('buscarTk').value);
+    });
+    tb.querySelectorAll('[data-act=del]').forEach(b=>b.onclick=()=>{
+      if(!confirm('¿Anular este ticket? Esta acción no se puede deshacer visualmente para el cliente.')) return;
+      const t=DB.tickets.find(x=>x.id===b.dataset.id);
+      t.estado='anulado'; persist(); paint(document.getElementById('buscarTk').value);
+    });
+  };
+  paint();
+  document.getElementById('buscarTk').oninput=(e)=>paint(e.target.value);
+}
+function editTicketModal(id){
+  const t=DB.tickets.find(x=>x.id===id);
+  const bg=document.createElement('div');
+  bg.className='modal-bg';
+  bg.innerHTML=`<div class="modal">
+    <h3>Editar / asignar ticket #${t.orden}</h3>
+    <div class="grid2">
+      <div class="field"><label>Nombre cliente</label><input id="emNombre" value="${esc(t.nombreCliente)}"></div>
+      <div class="field"><label>Cédula</label><input id="emDoc" value="${esc(t.documento)}"></div>
+      <div class="field"><label>Correo</label><input id="emCorreo" value="${esc(t.correo)}"></div>
+      <div class="field"><label>Categoría</label><select id="emCat">${CATEGORIAS.map(c=>`<option ${c===t.categoria?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>Ubicación</label><input id="emUbic" value="${esc(t.ubicacion?.numero||'')}" placeholder="Número / silla"></div>
+      <div class="field"><label>Precio</label><input id="emPrecio" type="number" value="${t.precio}"></div>
+    </div>
+    <div class="flexrow" style="margin-top:14px">
+      <button class="btn btn-primary" id="emSave">Guardar cambios</button>
+      <button class="btn btn-ghost" id="emClose">Cerrar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.onclick=(e)=>{ if(e.target===bg) bg.remove(); };
+  bg.querySelector('#emClose').onclick=()=>bg.remove();
+  bg.querySelector('#emSave').onclick=()=>{
+    t.nombreCliente=bg.querySelector('#emNombre').value.trim();
+    t.documento=bg.querySelector('#emDoc').value.trim();
+    t.correo=bg.querySelector('#emCorreo').value.trim();
+    t.categoria=bg.querySelector('#emCat').value;
+    t.ubicacion={tipo:t.ubicacion?.tipo||'General', numero:bg.querySelector('#emUbic').value.trim()};
+    t.precio=Number(bg.querySelector('#emPrecio').value)||0;
+    t.sinAsignar=false;
+    persist(); toast('Ticket actualizado'); bg.remove(); ticketListado();
+  };
+}
+
+function adminUsuarios(){
+  const el=document.getElementById('adminBody');
+  el.innerHTML=`
+    ${eventSelector()}
+    <div class="grid2" style="margin-top:10px">
+      <div class="panel">
+        <h3 style="margin-top:0">Puntos de ingreso QR</h3>
+        <div class="field"><label>Contraseña de acceso</label><input id="qrPass" type="text" placeholder="1111"></div>
+        <button class="btn" style="background:linear-gradient(135deg,var(--violet),#4a35a8);border:none;color:#fff" id="addQR">+ Crear siguiente usuario QR</button>
+        <hr class="hr">
+        <div id="qrList"></div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Vendedores VT</h3>
+        <div class="field"><label>Contraseña de acceso</label><input id="vtPass" type="text" placeholder="2222"></div>
+        <div class="field"><label>Cupo de tickets</label><input id="vtCupo" type="number" placeholder="30"></div>
+        <label class="check"><input type="checkbox" id="vtIlim"> Cupo ilimitado</label>
+        <button class="btn" style="margin-top:10px;background:linear-gradient(135deg,var(--amber),#b8790f);border:none;color:#241800" id="addVT">+ Crear siguiente vendedor VT</button>
+        <hr class="hr">
+        <div id="vtList"></div>
+      </div>
+    </div>`;
+  el.querySelector('#evSelActivo').onchange=(e)=>{ ADMIN_EVENT=e.target.value; adminUsuarios(); };
+  el.querySelector('#addQR').onclick=()=>{
+    const pass=el.querySelector('#qrPass').value.trim()||'1111';
+    const n=DB.qrUsers.filter(q=>q.eventoId===ADMIN_EVENT).length+1;
+    DB.qrUsers.push({id:uid('QR'), nombre:'QR'+n, password:pass, eventoId:ADMIN_EVENT});
+    persist(); toast('Usuario QR'+n+' creado'); adminUsuarios();
+  };
+  el.querySelector('#addVT').onclick=()=>{
+    const pass=el.querySelector('#vtPass').value.trim()||'2222';
+    const ilim=el.querySelector('#vtIlim').checked;
+    const cupo=Number(el.querySelector('#vtCupo').value)||0;
+    const n=DB.vtUsers.filter(v=>v.eventoId===ADMIN_EVENT).length+1;
+    DB.vtUsers.push({id:uid('VT'), nombre:'VT'+n, password:pass, eventoId:ADMIN_EVENT, ilimitado:ilim, cupo, vendidos:0});
+    persist(); toast('Vendedor VT'+n+' creado'); adminUsuarios();
+  };
+  paintUsuarios();
+}
+function paintUsuarios(){
+  const qrList=document.getElementById('qrList');
+  const vtList=document.getElementById('vtList');
+  if(!qrList) return;
+  const qrs=DB.qrUsers.filter(q=>q.eventoId===ADMIN_EVENT);
+  const vts=DB.vtUsers.filter(v=>v.eventoId===ADMIN_EVENT);
+  qrList.innerHTML=qrs.length? qrs.map(q=>`<div class="flexrow" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">
+      <span><b>${esc(q.nombre)}</b> <span class="small">pass: ${esc(q.password)}</span></span>
+      <span class="badge badge-ok">${DB.tickets.filter(t=>t.eventoId===ADMIN_EVENT && t.qrScanner===q.nombre).length} escaneos</span>
+    </div>`).join('') : `<p class="small">Sin puntos QR aún.</p>`;
+  vtList.innerHTML=vts.length? vts.map(v=>`<div class="flexrow" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">
+      <span><b>${esc(v.nombre)}</b> <span class="small">pass: ${esc(v.password)}</span></span>
+      <span class="badge ${v.ilimitado?'badge-ok':'badge-mut'}">${v.ilimitado?'Ilimitado':(v.vendidos||0)+'/'+v.cupo}</span>
+    </div>`).join('') : `<p class="small">Sin vendedores VT aún.</p>`;
+}
+
+function adminStats(){
+  const el=document.getElementById('adminBody');
+  const list=DB.tickets.filter(t=>t.eventoId===ADMIN_EVENT && t.estado!=='anulado');
+  const totalRecaudo=list.reduce((s,t)=>s+(t.precio||0),0);
+  const porCategoria={};
+  list.forEach(t=>{ porCategoria[t.categoria]=(porCategoria[t.categoria]||0)+1; });
+  el.innerHTML=`
+    ${eventSelector()}
+    <div class="grid3" style="grid-template-columns:repeat(4,1fr); margin-top:14px">
+      <div class="stat"><b>${list.length}</b><span>Tickets totales</span></div>
+      <div class="stat"><b>${list.filter(t=>t.escaneado).length}</b><span>Ingresos registrados</span></div>
+      <div class="stat"><b>${money(totalRecaudo)}</b><span>Total recaudado</span></div>
+      <div class="stat"><b>${DB.vtUsers.filter(v=>v.eventoId===ADMIN_EVENT).length}</b><span>Vendedores activos</span></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h3 style="margin-top:0">Distribución por categoría</h3>
+      ${Object.keys(porCategoria).length? Object.entries(porCategoria).map(([c,n])=>`
+        <div class="flexrow" style="margin-bottom:10px">
+          <span style="width:170px" class="small">${esc(c)}</span>
+          <div style="flex:1;background:var(--bg3);border-radius:8px;overflow:hidden;height:10px">
+            <div style="width:${Math.min(100,n/list.length*100)}%;height:100%;background:linear-gradient(90deg,var(--pink),var(--cyan))"></div>
+          </div>
+          <span class="small" style="width:40px;text-align:right">${n}</span>
+        </div>`).join('') : `<p class="small">Sin datos aún.</p>`}
+    </div>`;
+  el.querySelector('#evSelActivo').onchange=(e)=>{ ADMIN_EVENT=e.target.value; adminStats(); };
+}
+
+function adminChat(){
+  const el=document.getElementById('adminBody');
+  const hilos=[...new Set(DB.chats.map(c=>c.hilo))];
+  const ticketsConNombre=DB.tickets.filter(t=>t.nombreCliente);
+  el.innerHTML=`<div class="panel">
+    <h3 style="margin-top:0">Conversaciones con usuarios</h3>
+    <div class="field"><label>Selecciona un cliente</label>
+      <select id="chatSel">
+        <option value="general">General / soporte</option>
+        ${ticketsConNombre.map(t=>`<option value="${t.id}">${esc(t.nombreCliente)} · #${t.orden}</option>`).join('')}
+      </select>
+    </div>
+    <div id="adminChatBox"></div>
+  </div>`;
+  const paintBox=()=>{
+    const hilo=el.querySelector('#chatSel').value;
+    document.getElementById('adminChatBox').innerHTML=chatUI('admin', ADMIN_EVENT, 'Admin');
+    wireChat('admin', ADMIN_EVENT, hilo);
+  };
+  el.querySelector('#chatSel').onchange=paintBox;
+  paintBox();
+}
+
+/* =========================================================
+   QR — Escaneo de entradas
+   ========================================================= */
+let QR_STREAM=null;
+function renderQR(){
+  topbar('PULSE','PUNTO DE ESCANEO','var(--violet)');
+  const me=SESSION.data;
+  const ev=DB.events.find(e=>e.id===me.eventoId);
+  const main=document.createElement('main');
+  main.innerHTML=`<div class="wrap">
+    <div class="section-title">Punto ${esc(me.nombre)}</div>
+    <p class="section-sub">Evento: <b>${esc(ev?.nombre||'-')}</b> · Escanea o ingresa el código del ticket para validar el ingreso.</p>
+    <div class="grid2">
+      <div class="panel">
+        <h3 style="margin-top:0">Escanear con cámara</h3>
+        <div class="scanner-frame" id="scanFrame">
+          <video id="qrVideo" playsinline muted></video>
+          <div class="frame-line"></div>
+        </div>
+        <div class="flexrow" style="margin-top:14px;justify-content:center">
+          <button class="btn btn-cyan" id="startCam">Activar cámara</button>
+          <button class="btn btn-ghost" id="stopCam">Detener</button>
+        </div>
+        <p class="small" style="text-align:center;margin-top:8px">Si tu navegador no permite cámara, usa el ingreso manual.</p>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Ingreso manual del código</h3>
+        <div class="field"><label>Código del ticket</label><input id="manualCode" type="text" placeholder="TCK-XXXXX"></div>
+        <button class="btn btn-primary" id="manualScan" style="width:100%">Validar ticket</button>
+        <div id="scanResult" style="margin-top:18px"></div>
+      </div>
+    </div>
+    <hr class="hr">
+    <h3>Últimos escaneos</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Hora</th><th>Cliente</th><th>Categoría</th><th>Resultado</th></tr></thead>
+      <tbody id="qrLog"></tbody>
+    </table></div>
+  </div>`;
+  app.appendChild(main);
+
+  document.getElementById('manualScan').onclick=()=>{
+    const code=document.getElementById('manualCode').value.trim().toUpperCase();
+    validarTicket(code);
+  };
+  document.getElementById('manualCode').onkeydown=(e)=>{ if(e.key==='Enter') validarTicket(e.target.value.trim().toUpperCase()); };
+  document.getElementById('startCam').onclick=startCamera;
+  document.getElementById('stopCam').onclick=stopCamera;
+  paintQrLog();
+}
+function paintQrLog(){
+  const tb=document.getElementById('qrLog');
+  if(!tb) return;
+  const me=SESSION.data;
+  const rows=DB.tickets.filter(t=>t.qrScanner===me.nombre).sort((a,b)=>(b.horaEscaneo||'').localeCompare(a.horaEscaneo||'')).slice(0,20);
+  tb.innerHTML=rows.length? rows.map(t=>`<tr><td>${esc(t.horaEscaneo)}</td><td>${esc(t.nombreCliente)}</td><td>${esc(t.categoria)}</td><td><span class="badge badge-ok">Ok</span></td></tr>`).join('')
+    : `<tr><td colspan="4" class="small" style="text-align:center;padding:16px">Sin escaneos todavía.</td></tr>`;
+}
+function validarTicket(code){
+  const box=document.getElementById('scanResult');
+  const me=SESSION.data;
+  const t=DB.tickets.find(x=>x.id===code);
+  if(!t){ box.innerHTML=`<div class="badge badge-off">✖ Ticket no encontrado</div>`; return; }
+  if(t.eventoId!==me.eventoId){ box.innerHTML=`<div class="badge badge-off">✖ Este ticket no pertenece a este evento</div>`; return; }
+  if(t.estado!=='activo'){ box.innerHTML=`<div class="badge badge-off">✖ Ticket ${esc(t.estado)}, no válido</div>`; return; }
+  if(t.escaneado){ box.innerHTML=`<div class="badge badge-warn">⚠ Ya fue escaneado a las ${esc(t.horaEscaneo)} por ${esc(t.qrScanner)}</div>`; return; }
+  t.escaneado=true; t.horaEscaneo=nowTime(); t.qrScanner=me.nombre;
+  persist();
+  box.innerHTML=`<div class="badge badge-ok">✔ Acceso válido — ${esc(t.nombreCliente)} (${esc(t.categoria)})</div>`;
+  toast('Ticket validado: '+t.nombreCliente);
+  paintQrLog();
+}
+async function startCamera(){
+  try{
+    const video=document.getElementById('qrVideo');
+    QR_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    video.srcObject=QR_STREAM; await video.play();
+    const canvas=document.createElement('canvas');
+    const ctx=canvas.getContext('2d');
+    const tick=()=>{
+      if(!QR_STREAM) return;
+      if(video.readyState===video.HAVE_ENOUGH_DATA){
+        canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+        if(window.jsQR){
+          const code=jsQR(img.data,img.width,img.height);
+          if(code && code.data){ validarTicket(code.data.trim().toUpperCase()); stopCamera(); return; }
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }catch(err){
+    toast('No se pudo activar la cámara. Usa el ingreso manual.', true);
+  }
+}
+function stopCamera(){
+  if(QR_STREAM){ QR_STREAM.getTracks().forEach(t=>t.stop()); QR_STREAM=null; }
+}
+
+/* =========================================================
+   VT — Vendedor
+   ========================================================= */
+function renderVT(){
+  topbar('PULSE','PANEL VENDEDOR','var(--amber)');
+  const me=DB.vtUsers.find(v=>v.id===SESSION.data.id);
+  const ev=DB.events.find(e=>e.id===me.eventoId);
+  const vendidos=DB.tickets.filter(t=>t.eventoId===me.eventoId && t.vt===me.nombre).length;
+  const main=document.createElement('main');
+  main.innerHTML=`<div class="wrap">
+    <div class="section-title">Bienvenido, ${esc(me.nombre)}</div>
+    <p class="section-sub">Evento: <b>${esc(ev?.nombre||'-')}</b></p>
+    <div class="grid3" style="grid-template-columns:repeat(3,1fr); margin-bottom:20px">
+      <div class="stat"><b>${vendidos}</b><span>Tickets vendidos por ti</span></div>
+      <div class="stat"><b>${me.ilimitado?'∞':Math.max((me.cupo||0)-vendidos,0)}</b><span>Cupo disponible</span></div>
+      <div class="stat"><b>${money(DB.tickets.filter(t=>t.eventoId===me.eventoId && t.vt===me.nombre).reduce((s,t)=>s+t.precio,0))}</b><span>Total vendido</span></div>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0">Vender / asignar ticket</h3>
+      <div class="grid2">
+        <div class="field"><label>Nombre del cliente</label><input id="vtNombre" type="text"></div>
+        <div class="field"><label>Cédula</label><input id="vtDoc" type="text"></div>
+        <div class="field"><label>Correo</label><input id="vtCorreo" type="email"></div>
+        <div class="field"><label>Categoría</label><select id="vtCat">${CATEGORIAS.map(c=>`<option>${c}</option>`).join('')}</select></div>
+        <div class="field"><label>Ubicación / silla</label><input id="vtUbicExtra" type="text" placeholder="Ej: G-045"></div>
+        <div class="field"><label>Precio</label><input id="vtPrecio" type="number" placeholder="120000"></div>
+        <div class="field"><label>Tipo de pago</label><select id="vtPago"><option>Efectivo</option><option>Transferencia</option></select></div>
+      </div>
+      <button class="btn" style="background:linear-gradient(135deg,var(--amber),#b8790f);border:none;color:#241800" id="vtCrear">+ Generar ticket</button>
+    </div>
+    <hr class="hr">
+    <h3>Tus ventas</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Cliente</th><th>Categoría</th><th>Precio</th><th>Escaneo</th></tr></thead>
+      <tbody id="vtTbody"></tbody>
+    </table></div>
+  </div>`;
+  app.appendChild(main);
+  document.getElementById('vtCat').onchange=(e)=>{ if(CATS_GRATIS.includes(e.target.value)) document.getElementById('vtPrecio').value=0; };
+  document.getElementById('vtCrear').onclick=()=>{
+    const nombre=document.getElementById('vtNombre').value.trim();
+    const doc=document.getElementById('vtDoc').value.trim();
+    if(!nombre||!doc) return toast('Nombre y cédula son obligatorios',true);
+    if(!me.ilimitado && vendidos>=me.cupo) return toast('Alcanzaste tu cupo de tickets asignado',true);
+    ADMIN_EVENT=me.eventoId;
+    const categoria=document.getElementById('vtCat').value;
+    let precio=Number(document.getElementById('vtPrecio').value)||0;
+    if(CATS_GRATIS.includes(categoria)) precio=0;
+    crearTicket({
+      nombre, doc, correo:document.getElementById('vtCorreo').value.trim(),
+      categoria, ubicTipo:'General', ubicExtra:document.getElementById('vtUbicExtra').value.trim(),
+      precio, pago:document.getElementById('vtPago').value, vt:me.nombre
+    });
+    me.vendidos=(me.vendidos||0)+1;
+    persist(); toast('Ticket generado para '+nombre); renderVT();
+  };
+  paintVTTable(me);
+}
+function paintVTTable(me){
+  const tb=document.getElementById('vtTbody');
+  const rows=DB.tickets.filter(t=>t.eventoId===me.eventoId && t.vt===me.nombre);
+  tb.innerHTML=rows.length? rows.map(t=>`<tr>
+      <td>${t.orden}</td><td>${esc(t.nombreCliente)}</td><td>${esc(t.categoria)}</td><td>${money(t.precio)}</td>
+      <td>${t.escaneado?'<span class="badge badge-ok">✔</span>':'<span class="badge badge-mut">pendiente</span>'}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="small" style="text-align:center;padding:16px">Aún no has vendido tickets.</td></tr>`;
+}
+
+/* ---------- init ---------- */
+render();
+</script>
+</body>
+</html>
