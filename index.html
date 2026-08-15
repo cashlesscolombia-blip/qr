@@ -645,7 +645,7 @@ const Seats = {
   async ensureSeeded(evento){
     const {count} = await sb.from('asientos').select('id',{count:'exact', head:true}).eq('evento_id', evento.id);
     if(count && count>0) return;
-    const mapa = evento.mapa || {palcos:8, vip:30, general:120};
+    const mapa = evento.mapa || {palcos:10, vip:30, general:120};
     const rows = [];
     for(let p=1;p<=mapa.palcos;p++){
       for(let s=1;s<=8;s++){
