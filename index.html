@@ -164,9 +164,9 @@ main{flex:1; padding:26px 18px 60px; max-width:1180px; margin:0 auto; width:100%
 }
 .card:hover{border-color:rgba(0,240,255,.4); box-shadow:var(--shadow), 0 0 0 1px rgba(0,240,255,.12), var(--glow-cyan);}
 .hide{display:none !important;}
-.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
-.grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
-.grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:16px;}
+.grid-2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px;}
+.grid-3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px;}
+.grid-4{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px;}
 @media(max-width:900px){.grid-3{grid-template-columns:1fr 1fr;} .grid-4{grid-template-columns:1fr 1fr;}}
 @media(max-width:640px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}}
 
@@ -445,18 +445,19 @@ tbody tr:hover{background:rgba(255,46,224,.06);}
 .wa-btn:hover{filter:brightness(1.1); transform:translateY(-2px);}
 
 /* ---------- comprar tickets ---------- */
-.buy-list{display:flex; flex-direction:column; gap:8px; max-height:420px; overflow-y:auto; padding-right:2px;}
+.buy-list{display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto; padding-right:2px;}
 .buy-item{
-  display:flex; align-items:center; gap:12px; padding:11px 13px; border-radius:12px;
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px;
   background:var(--panel-2); border:1px solid var(--line-soft); cursor:pointer; transition:.15s;
+  text-transform:none; letter-spacing:normal;
 }
 .buy-item:hover{border-color:var(--cyan);}
-.buy-item.selected{border-color:var(--lime); box-shadow:0 0 12px rgba(180,255,90,.25); background:rgba(180,255,90,.06);}
-.buy-item input[type="checkbox"]{width:17px; height:17px; accent-color:var(--lime); cursor:pointer; flex-shrink:0;}
-.buy-item .bi-info{flex:1; min-width:0;}
-.buy-item .bi-info b{display:block; font-size:13.5px;}
-.buy-item .bi-info span{display:block; font-size:11px; color:var(--text-dim);}
-.buy-item .bi-price{font-weight:800; color:var(--lime); font-size:14px; white-space:nowrap;}
+.buy-item.selected{border-color:var(--lime); box-shadow:0 0 10px rgba(180,255,90,.25); background:rgba(180,255,90,.06);}
+.buy-item input[type="checkbox"], .buy-item input[type="radio"]{width:15px; height:15px; min-width:15px; margin:0; accent-color:var(--lime); cursor:pointer; flex-shrink:0;}
+.buy-item .bi-info{flex:1 1 auto; min-width:0;}
+.buy-item .bi-info b{display:block; font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; letter-spacing:.04em;}
+.buy-item .bi-info span{display:block; font-size:10px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.buy-item .bi-price{font-weight:800; color:var(--lime); font-size:13px; white-space:nowrap; flex-shrink:0;}
 .buy-total-bar{
   position:sticky; bottom:0; display:flex; align-items:center; justify-content:space-between; gap:12px;
   background:var(--panel); border:1px solid var(--line-soft); border-radius:12px; padding:12px 16px; margin-top:12px;
@@ -898,7 +899,7 @@ const Seats = {
   async ensureSeeded(evento){
     const {count} = await sb.from('asientos').select('id',{count:'exact', head:true}).eq('evento_id', evento.id);
     if(count && count>0) return;
-    const mapa = evento.mapa || {palcos:8, vip:30, general:120};
+    const mapa = evento.mapa || {palcos:0, vip:0, general:0};
     const rows = [];
     for(let p=1;p<=mapa.palcos;p++){
       for(let s=1;s<=8;s++){
@@ -913,13 +914,14 @@ const Seats = {
     }
     if(rows.length) await sb.from('asientos').insert(rows);
   },
-  // Agrega asientos nuevos (palcos y/o VIP) sin tocar los ya existentes,
-  // usado cuando el admin aumenta las cantidades desde "Ajustar palcos/VIP".
+  // Agrega asientos nuevos (palcos, VIP y/o general) sin tocar los ya existentes,
+  // usado cuando el admin aumenta las cantidades desde "Ajustar palcos/VIP/general".
   async growToMapa(evento){
-    const mapa = evento.mapa || {palcos:8, vip:30, general:120};
+    const mapa = evento.mapa || {palcos:0, vip:0, general:0};
     const existentes = await this.all(evento.id);
     const palcosExistentes = new Set(existentes.filter(a=>a.zona==='palco').map(a=>a.numero.split('-')[0]));
     const vipExistentes = existentes.filter(a=>a.zona==='vip').length;
+    const generalExistentes = existentes.filter(a=>a.zona==='general').length;
     const rows = [];
     for(let p=1;p<=mapa.palcos;p++){
       if(palcosExistentes.has(`P${p}`)) continue;
@@ -929,6 +931,9 @@ const Seats = {
     }
     for(let v=vipExistentes+1; v<=(mapa.vip||0); v++){
       rows.push({evento_id:evento.id, zona:'vip', numero:`V${v}`});
+    }
+    for(let g=generalExistentes+1; g<=(mapa.general||0); g++){
+      rows.push({evento_id:evento.id, zona:'general', numero:`G${g}`});
     }
     if(rows.length) await sb.from('asientos').insert(rows);
   },
@@ -1034,15 +1039,21 @@ const MapView = {
       const seats = palcos[p].sort((a,b)=>a.numero.localeCompare(b.numero, undefined, {numeric:true}));
       zones.push({key:'P_'+p, label:p, cols:4, rows:Math.ceil(seats.length/4)||1, seats, kind:'palco'});
     });
-    zones.push({
-      key:'VIP', label:`ZONA VIP (${vipTaken}/${vipTotal})`, cols:10, rows:Math.max(1,Math.ceil(vipTotal/10)),
-      seats:vipSeats, kind:'vip', empty: vipTotal===0
-    });
+    // ZONA VIP y GENERAL solo se muestran si el admin realmente creó puestos ahí
+    // (vip>0 / general>0 al crear o ajustar el evento). Si no, no aparecen en el mapa.
+    if(vipTotal>0){
+      zones.push({
+        key:'VIP', label:`ZONA VIP (${vipTaken}/${vipTotal})`, cols:10, rows:Math.max(1,Math.ceil(vipTotal/10)),
+        seats:vipSeats, kind:'vip'
+      });
+    }
     const generalSeats = asientos.filter(a=>a.zona==='general').sort((a,b)=>a.numero.localeCompare(b.numero, undefined, {numeric:true}));
-    zones.push({
-      key:'GENERAL', label:`GENERAL (${generalTaken}/${generalTotal})`, cols:12, rows:Math.max(1,Math.ceil(generalSeats.length/12)),
-      seats:generalSeats, kind:'general', empty: generalTotal===0
-    });
+    if(generalTotal>0){
+      zones.push({
+        key:'GENERAL', label:`GENERAL (${generalTaken}/${generalTotal})`, cols:12, rows:Math.max(1,Math.ceil(generalSeats.length/12)),
+        seats:generalSeats, kind:'general'
+      });
+    }
     // ---- zonas/categorías personalizadas creadas desde el admin (palcos nuevos ya cubiertos arriba) ----
     Object.keys(otras).sort((a,b)=>a.localeCompare(b)).forEach(zonaKey=>{
       const seats = otras[zonaKey].sort((a,b)=>a.numero.localeCompare(b.numero, undefined, {numeric:true}));
@@ -1065,14 +1076,20 @@ const MapView = {
     const packed = this.packDefault(palcoBoxes, stagePos.y + stageH + 10, canvasW);
     let cursorY = packed.bottom;
     const defaultPos = {...packed.pos};
-    ['VIP','GENERAL'].forEach(k=>{
-      const z = zones.find(zz=>zz.key===k);
-      defaultPos[k] = {x:6, y:cursorY};
+    // VIP, GENERAL y cualquier categoría personalizada (solo las que sí existen) se
+    // apilan debajo de los palcos, en el orden en que fueron creadas.
+    zones.filter(z=>z.kind!=='palco').forEach(z=>{
+      defaultPos[z.key] = {x:6, y:cursorY};
       cursorY += z.h + 8;
     });
 
     zones.forEach(z=>{ z.pos = layout[z.key] || defaultPos[z.key]; });
     const canvasH = Math.max(cursorY, stagePos.y+stageH+10) + 4;
+
+    if(!zones.length){
+      container.innerHTML = `<div class="card"><p class="hint">${editable ? 'Este evento aún no tiene palcos, VIP, general ni categorías creadas. Configúralos desde "Tus eventos".' : 'El mapa de este evento aún no tiene ubicaciones configuradas.'}</p></div>`;
+      return;
+    }
 
     // ---- render HTML ----
     const seatEl = (s, extraTitle)=>{
@@ -1698,7 +1715,11 @@ const AdminApp = {
               <select id="evVip">${[0,10,20,30,40,50,60,80,100,150,200].map(n=>`<option value="${n}" ${n===30?'selected':''}>${n} puestos</option>`).join('')}</select>
             </div>
           </div>
-          <p class="hint">Podrás aumentar estas cantidades luego desde "Tus eventos" y se reflejarán en el mapa del evento.</p>
+          <div class="field">
+            <label>Puestos zona general</label>
+            <select id="evGeneral">${[0,20,50,100,120,150,200,300,500].map(n=>`<option value="${n}" ${n===0?'selected':''}>${n===0?'Sin zona general':n+' puestos'}</option>`).join('')}</select>
+          </div>
+          <p class="hint">Podrás aumentar estas cantidades luego desde "Tus eventos" y se reflejarán en el mapa del evento. Solo las ubicaciones que crees aquí (o luego) aparecerán en el mapa; ninguna se agrega automáticamente.</p>
           <div class="row">
             <div class="field" style="flex:1;"><label>Precio Palco (por silla)</label><input id="evPrecioPalco" type="number" min="0" placeholder="0"></div>
             <div class="field" style="flex:1;"><label>Precio VIP</label><input id="evPrecioVip" type="number" min="0" placeholder="0"></div>
@@ -1729,22 +1750,26 @@ const AdminApp = {
         <div class="row" style="flex-wrap:wrap;">
           <button class="btn btn-sm" onclick="AdminApp.selectEvento('${e.id}')">Seleccionar</button>
           <button class="btn btn-sm" onclick="AdminApp.toggleEvento('${e.id}','${e.estado}')">${e.estado==='activo'?'Pausar':'Activar'}</button>
-          <button class="btn btn-sm" onclick="AdminApp.openAjustarMapa('${e.id}')">Ajustar palcos/VIP</button>
+          <button class="btn btn-sm" onclick="AdminApp.openAjustarMapa('${e.id}')">Ajustar palcos/VIP/general</button>
           <button class="btn btn-sm" onclick="AdminApp.configurarPago('${e.id}')">Config. de pago</button>
         </div>
         <div id="mapaEdit-${e.id}" class="hide" style="margin-top:10px; border-top:1px dashed var(--line); padding-top:10px;">
           <div class="row">
             <div class="field" style="flex:1;">
               <label>Cantidad de palcos</label>
-              <select id="mapaEditPalcos-${e.id}">${Array.from({length:20}).map((_,i)=>`<option value="${i+1}" ${(i+1)===((e.mapa&&e.mapa.palcos)||8)?'selected':''}>${i+1} palco${i+1>1?'s':''}</option>`).join('')}</select>
+              <select id="mapaEditPalcos-${e.id}">${Array.from({length:20}).map((_,i)=>`<option value="${i+1}" ${(i+1)===((e.mapa&&e.mapa.palcos)||0)?'selected':''}>${i+1} palco${i+1>1?'s':''}</option>`).join('')}</select>
             </div>
             <div class="field" style="flex:1;">
               <label>Puestos VIP</label>
-              <select id="mapaEditVip-${e.id}">${[0,10,20,30,40,50,60,80,100,150,200].map(n=>`<option value="${n}" ${n===((e.mapa&&e.mapa.vip)!==undefined?(e.mapa&&e.mapa.vip):30)?'selected':''}>${n} puestos</option>`).join('')}</select>
+              <select id="mapaEditVip-${e.id}">${[0,10,20,30,40,50,60,80,100,150,200].map(n=>`<option value="${n}" ${n===((e.mapa&&e.mapa.vip)||0)?'selected':''}>${n} puestos</option>`).join('')}</select>
             </div>
           </div>
+          <div class="field">
+            <label>Puestos zona general</label>
+            <select id="mapaEditGeneral-${e.id}">${[0,20,50,100,120,150,200,300,500].map(n=>`<option value="${n}" ${n===((e.mapa&&e.mapa.general)||0)?'selected':''}>${n===0?'Sin zona general':n+' puestos'}</option>`).join('')}</select>
+          </div>
           <button class="btn btn-primary btn-sm btn-block" onclick="AdminApp.guardarMapa('${e.id}')">Guardar y actualizar mapa</button>
-          <p class="hint">Solo se agregan palcos/puestos nuevos; los existentes y sus ocupantes no se modifican.</p>
+          <p class="hint">Solo se agregan palcos/puestos nuevos; los existentes y sus ocupantes no se modifican. Si dejas una cantidad en 0, esa zona no aparece en el mapa.</p>
         </div>
       </div>`).join('');
   },
@@ -1757,18 +1782,19 @@ const AdminApp = {
     if(!evento) return;
     const palcos = parseInt(document.getElementById('mapaEditPalcos-'+id).value, 10);
     const vip = parseInt(document.getElementById('mapaEditVip-'+id).value, 10);
-    const mapaActual = evento.mapa || {palcos:8, vip:30, general:120};
-    if(palcos < mapaActual.palcos || vip < mapaActual.vip){
+    const general = parseInt(document.getElementById('mapaEditGeneral-'+id).value, 10);
+    const mapaActual = evento.mapa || {palcos:0, vip:0, general:0};
+    if(palcos < mapaActual.palcos || vip < mapaActual.vip || general < (mapaActual.general||0)){
       toast('No se pueden reducir las cantidades, solo aumentarlas', true);
       return;
     }
-    const nuevoMapa = {...mapaActual, palcos, vip};
+    const nuevoMapa = {...mapaActual, palcos, vip, general};
     const {error} = await sb.from('eventos').update({mapa: nuevoMapa}).eq('id', id);
     if(error){ toast('Error actualizando el evento: '+error.message, true); console.error(error); return; }
     evento.mapa = nuevoMapa;
     if(this.evento && this.evento.id===id) this.evento.mapa = nuevoMapa;
     await Seats.growToMapa(evento);
-    toast('Mapa actualizado: '+palcos+' palcos, '+vip+' puestos VIP');
+    toast('Mapa actualizado: '+palcos+' palcos, '+vip+' VIP, '+general+' general');
     this.renderEventos();
   },
   async crearEvento(){
@@ -1777,6 +1803,7 @@ const AdminApp = {
     const hora = document.getElementById('evHora').value || null;
     const palcos = parseInt(document.getElementById('evPalcos').value, 10) || 8;
     const vip = parseInt(document.getElementById('evVip').value, 10) || 0;
+    const general = parseInt(document.getElementById('evGeneral').value, 10) || 0;
     if(!nombre){ toast('Escribe un nombre para el evento', true); return; }
     const codigo = genCode('EVT');
     const precios = {
@@ -1784,7 +1811,7 @@ const AdminApp = {
       vip: parseFloat(document.getElementById('evPrecioVip').value)||0,
       general: parseFloat(document.getElementById('evPrecioGeneral').value)||0
     };
-    const mapa = {palcos, vip, general:120, precios};
+    const mapa = {palcos, vip, general, precios};
     const {data, error} = await sb.from('eventos').insert({nombre, codigo, fecha, hora, estado:'activo', mapa}).select();
     if(error){ toast('Error creando el evento: '+error.message, true); console.error(error); return; }
     toast('Evento creado: '+codigo);
@@ -1999,7 +2026,7 @@ const AdminApp = {
     if(cat==='patrocinador' || cat==='invitado'){ precioInput.value = 0; precioInput.disabled = true; } else { precioInput.disabled = false; }
     let html = '';
     if(cat==='palco'){
-      const totalPalcos = (this.evento && this.evento.mapa && this.evento.mapa.palcos) || 8;
+      const totalPalcos = (this.evento && this.evento.mapa && this.evento.mapa.palcos) || 0;
       html = `
         <label>Palco</label>
         <select id="${prefix}Palco" onchange="AdminApp.loadSeats('${prefix}','palco')">${Array.from({length:totalPalcos}).map((_,i)=>`<option value="${i+1}">Palco ${i+1}</option>`).join('')}</select>
