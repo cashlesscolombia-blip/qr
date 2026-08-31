@@ -559,6 +559,7 @@ tbody tr:hover{background:rgba(255,46,224,.06);}
         <span class="back" onclick="Router.go('landing')">‹ volver</span>
         <div class="card">
           <div class="section-title"><h2>Control de acceso</h2></div>
+          <div class="field"><label>Evento</label><select id="qrEvento"></select></div>
           <div class="field"><label>Usuario</label><select id="qrUser"></select></div>
           <div class="field"><label>Contraseña</label><input id="qrPass" type="password" placeholder="••••"></div>
           <button class="btn btn-primary btn-block" onclick="QRApp.login()">Ingresar</button>
@@ -572,6 +573,7 @@ tbody tr:hover{background:rgba(255,46,224,.06);}
         <span class="back" onclick="Router.go('landing')">‹ volver</span>
         <div class="card">
           <div class="section-title"><h2>Punto de venta</h2></div>
+          <div class="field"><label>Evento</label><select id="vtEvento"></select></div>
           <div class="field"><label>Usuario</label><select id="vtUser"></select></div>
           <div class="field"><label>Contraseña</label><input id="vtPass" type="password" placeholder="••••"></div>
           <button class="btn btn-primary btn-block" onclick="VTApp.login()">Ingresar</button>
@@ -879,6 +881,7 @@ function renderEventPill(evento){
 const DB = {
   async eventos(){ const {data,error} = await sb.from('eventos').select('*').order('created_at',{ascending:false}); if(error) throw error; return data; },
   async eventoActivo(){ const {data} = await sb.from('eventos').select('*').eq('estado','activo').order('created_at',{ascending:false}).limit(1); return data && data[0]; },
+  async eventosActivos(){ const {data} = await sb.from('eventos').select('*').eq('estado','activo').order('created_at',{ascending:false}); return data || []; },
   async ticketsByEvento(eventoId){ const {data,error} = await sb.from('tickets').select('*').eq('evento_id', eventoId).order('created_at',{ascending:false}); if(error) throw error; return data; },
   async vendedores(tipo, eventoId){
     let q = sb.from('vendedores').select('*').eq('tipo', tipo);
@@ -1005,6 +1008,7 @@ const MapView = {
 
     const palcos = {}; let vipTaken=0, vipTotal=0, generalTaken=0, generalTotal=0;
     const vipSeats = [];
+    const otras = {}; // zona -> asientos[], para categorías/ubicaciones personalizadas creadas por el admin
     asientos.forEach(a=>{
       if(a.zona==='palco'){
         const p = a.numero.split('-')[0];
@@ -1015,6 +1019,9 @@ const MapView = {
         vipSeats.push(a);
       } else if(a.zona==='general'){
         generalTotal++; if(a.ocupado) generalTaken++;
+      } else if(a.zona){
+        otras[a.zona] = otras[a.zona] || [];
+        otras[a.zona].push(a);
       }
     });
     vipSeats.sort((a,b)=>a.numero.localeCompare(b.numero, undefined, {numeric:true}));
@@ -1031,10 +1038,20 @@ const MapView = {
       key:'VIP', label:`ZONA VIP (${vipTaken}/${vipTotal})`, cols:10, rows:Math.max(1,Math.ceil(vipTotal/10)),
       seats:vipSeats, kind:'vip', empty: vipTotal===0
     });
-    const generalSeats = Array.from({length:Math.min(generalTotal,120)}).map((_,i)=> asientos.find(a=>a.zona==='general' && a.numero===`G${i+1}`)).filter(Boolean);
+    const generalSeats = asientos.filter(a=>a.zona==='general').sort((a,b)=>a.numero.localeCompare(b.numero, undefined, {numeric:true}));
     zones.push({
       key:'GENERAL', label:`GENERAL (${generalTaken}/${generalTotal})`, cols:12, rows:Math.max(1,Math.ceil(generalSeats.length/12)),
       seats:generalSeats, kind:'general', empty: generalTotal===0
+    });
+    // ---- zonas/categorías personalizadas creadas desde el admin (palcos nuevos ya cubiertos arriba) ----
+    Object.keys(otras).sort((a,b)=>a.localeCompare(b)).forEach(zonaKey=>{
+      const seats = otras[zonaKey].sort((a,b)=>a.numero.localeCompare(b.numero, undefined, {numeric:true}));
+      const taken = seats.filter(s=>s.ocupado).length;
+      const nombreZona = zonaKey.replace(/_/g,' ').toUpperCase();
+      zones.push({
+        key:'Z_'+zonaKey, label:`${nombreZona} (${taken}/${seats.length})`, cols:Math.min(10, Math.max(4, seats.length||1)),
+        rows:Math.max(1, Math.ceil(seats.length/10)), seats, kind:'otro', nombreZona, empty: seats.length===0
+      });
     });
 
     // ---- sizes & default packed positions ----
@@ -1068,7 +1085,8 @@ const MapView = {
         inner = `<div class="hint" style="grid-column:1/-1; font-size:10px; padding:2px 4px;">Sin puestos</div>`;
       } else {
         inner = z.seats.map(s=>{
-          const info = z.kind==='palco' ? `${z.label} · Silla ${s.numero.split('-')[1]||s.numero}` : `${z.kind==='vip'?'VIP':'General'} · ${s.numero}`;
+          const nombreCat = z.kind==='vip' ? 'VIP' : (z.kind==='general' ? 'General' : z.nombreZona);
+          const info = z.kind==='palco' ? `${z.label} · Silla ${s.numero.split('-')[1]||s.numero}` : `${nombreCat} · ${s.numero}`;
           return seatEl(s, info);
         }).join('');
       }
@@ -1377,6 +1395,10 @@ const UsuarioApp = {
         </div>`;
       return;
     }
+    if(!this.compra.evento){
+      await this.renderSeleccionEvento();
+      return;
+    }
     await this.renderSeleccionUI();
   },
   async registrarComprador(){
@@ -1389,10 +1411,44 @@ const UsuarioApp = {
     this.compra.sala = 'admin_usuario_' + correo;
     await this.renderComprar();
   },
+  // Permite al cliente elegir a cuál evento activo quiere comprarle,
+  // cuando hay más de uno disponible al mismo tiempo.
+  async renderSeleccionEvento(){
+    const box = document.getElementById('u-comprar');
+    box.innerHTML = `<div class="hint" style="padding:20px;">Cargando eventos activos…</div>`;
+    const eventos = await DB.eventosActivos();
+    this.compra.eventosDisponibles = eventos;
+    if(!eventos.length){
+      box.innerHTML = `<div class="card"><p class="hint">No hay eventos activos disponibles para la venta en este momento.</p></div>`;
+      return;
+    }
+    if(eventos.length===1){
+      this.compra.evento = eventos[0];
+      await this.renderSeleccionUI();
+      return;
+    }
+    box.innerHTML = `
+      <div class="card" style="max-width:520px; margin:0 auto;">
+        <div class="section-title"><h2 style="font-size:19px;">¿A qué evento quieres comprar?</h2></div>
+        <p class="hint" style="margin-bottom:14px;">Hola ${escapeHtml(this.compra.comprador.nombre)}, elige el evento activo al que deseas comprar tu ticket.</p>
+        ${eventos.map(e=>`
+          <label class="buy-item" style="cursor:pointer;">
+            <input type="radio" name="cmpEventoSel" onchange="UsuarioApp.elegirEvento('${e.id}')">
+            <div class="bi-info"><b>${escapeHtml(e.nombre)}</b></div>
+          </label>`).join('')}
+      </div>`;
+  },
+  async elegirEvento(eventoId){
+    const evento = (this.compra.eventosDisponibles||[]).find(e=>e.id===eventoId);
+    if(!evento) return;
+    this.compra.evento = evento;
+    await this.renderSeleccionUI();
+  },
   seatLabel(a){
     if(a.zona==='palco') return `Palco ${a.numero.split('-')[0].replace('P','')} · Silla ${a.numero.split('-')[1]||''}`;
     if(a.zona==='vip') return `VIP · ${a.numero}`;
-    return `General · ${a.numero}`;
+    if(a.zona==='general') return `General · ${a.numero}`;
+    return `${(a.zona||'').toString().replace(/_/g,' ').toUpperCase()} · ${a.numero}`;
   },
   async renderSeleccionUI(){
     const box = document.getElementById('u-comprar');
@@ -1408,7 +1464,7 @@ const UsuarioApp = {
     box.innerHTML = `
       <div class="card" style="margin-bottom:14px;">
         <div class="section-title"><h2 style="font-size:19px;">${escapeHtml(evento.nombre)}</h2></div>
-        <p class="hint">Hola ${escapeHtml(this.compra.comprador.nombre)}, elige una o varias ubicaciones disponibles. Solo verás la ubicación y el valor a pagar.</p>
+        <p class="hint">Hola ${escapeHtml(this.compra.comprador.nombre)}, elige una ubicación disponible (solo puedes seleccionar un ticket por compra). Si quieres otro ticket más, hazlo en una compra aparte una vez termines esta.</p>
       </div>
       <div class="grid-2">
         <div class="card">
@@ -1434,25 +1490,27 @@ const UsuarioApp = {
     const list = document.getElementById('cmpLista');
     if(!asientos.length){ list.innerHTML = '<p class="hint">No hay ubicaciones disponibles en este momento.</p>'; return; }
     list.innerHTML = asientos.map(a=>{
-      const precio = a.zona==='palco' ? (precios.palco||0) : a.zona==='vip' ? (precios.vip||0) : (precios.general||0);
+      const precio = a.zona==='palco' ? (precios.palco||0) : a.zona==='vip' ? (precios.vip||0) : a.zona==='general' ? (precios.general||0) : (precios[a.zona]||0);
+      const etiquetaZona = a.zona==='palco'?'Palco':(a.zona==='vip'?'Zona VIP':(a.zona==='general'?'Zona general':(a.zona||'').toString().replace(/_/g,' ')));
       return `<label class="buy-item" id="bi-${a.id}">
-        <input type="checkbox" onchange="UsuarioApp.toggleSeat('${a.id}', ${precio})">
-        <div class="bi-info"><b>${escapeHtml(this.seatLabel(a))}</b><span>${a.zona==='palco'?'Palco':(a.zona==='vip'?'Zona VIP':'Zona general')}</span></div>
+        <input type="radio" name="cmpAsientoSel" onchange="UsuarioApp.toggleSeat('${a.id}', ${precio})">
+        <div class="bi-info"><b>${escapeHtml(this.seatLabel(a))}</b><span>${escapeHtml(etiquetaZona)}</span></div>
         <div class="bi-price">${money(precio)}</div>
       </label>`;
     }).join('');
   },
+  // Solo se permite escoger UNA ubicación por compra: cada selección nueva
+  // reemplaza la anterior (los inputs son radios del mismo grupo).
   toggleSeat(asientoId, precio){
     const asiento = this.compra.asientos.find(a=>a.id===asientoId);
     if(!asiento) return;
+    Object.keys(this.compra.seleccion).forEach(id=>{
+      const prevItem = document.getElementById('bi-'+id);
+      if(prevItem) prevItem.classList.remove('selected');
+    });
+    this.compra.seleccion = {[asientoId]: {asiento, precio}};
     const item = document.getElementById('bi-'+asientoId);
-    if(this.compra.seleccion[asientoId]){
-      delete this.compra.seleccion[asientoId];
-      if(item) item.classList.remove('selected');
-    } else {
-      this.compra.seleccion[asientoId] = {asiento, precio};
-      if(item) item.classList.add('selected');
-    }
+    if(item) item.classList.add('selected');
     const items = Object.values(this.compra.seleccion);
     document.getElementById('cmpCant').textContent = items.length;
     document.getElementById('cmpTotal').textContent = money(items.reduce((a,x)=>a+x.precio,0));
@@ -2393,19 +2451,27 @@ const QRApp = {
   historial: [],
   scanner: null,
   identity: null,
+  eventosDisponibles: [],
   async loadUserList(){
     const {data} = await sb.from('vendedores').select('*').eq('tipo','qr');
     const sel = document.getElementById('qrUser');
     sel.innerHTML = (data||[]).map(u=>`<option value="${u.usuario}">${escapeHtml(u.usuario)} ${u.nombre?'- '+escapeHtml(u.nombre):''}</option>`).join('') || '<option value="">Sin usuarios QR creados por el admin</option>';
+    this.eventosDisponibles = await DB.eventosActivos();
+    const evSel = document.getElementById('qrEvento');
+    evSel.innerHTML = this.eventosDisponibles.length
+      ? this.eventosDisponibles.map(e=>`<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('')
+      : '<option value="">No hay eventos activos</option>';
   },
   async login(){
     const usuario = document.getElementById('qrUser').value;
     const pass = document.getElementById('qrPass').value;
+    const eventoId = document.getElementById('qrEvento').value;
     if(!usuario){ toast('No hay usuarios QR disponibles', true); return; }
+    if(!eventoId){ toast('Selecciona el evento en el que vas a escanear', true); return; }
     const {data} = await sb.from('vendedores').select('*').eq('tipo','qr').eq('usuario', usuario).eq('password', pass).limit(1);
     if(!data || !data.length){ toast('Usuario o contraseña incorrectos', true); return; }
     this.identity = data[0];
-    this.evento = await DB.eventoActivo();
+    this.evento = this.eventosDisponibles.find(e=>e.id===eventoId) || await DB.eventoActivo();
     Auth.setRole('qr', this.identity, 'QR · '+usuario);
     renderEventPill(this.evento);
     Router.go('qr');
@@ -2464,6 +2530,7 @@ const QRApp = {
     const {data} = await sb.from('tickets').select('*').eq('codigo', codigo).limit(1);
     const ticket = data && data[0];
     if(!ticket){ this.showResult('bad', 'Entrada inválida', 'Este código no corresponde a ningún ticket.'); speak('Entrada inválida'); beepAlert(); return; }
+    if(this.evento && ticket.evento_id!==this.evento.id){ this.showResult('bad', 'Ticket de otro evento', 'Este ticket no pertenece al evento seleccionado en este lector.'); speak('Entrada inválida'); beepAlert(); return; }
     const {data: evData} = await sb.from('eventos').select('*').eq('id', ticket.evento_id).limit(1);
     const evento = evData && evData[0];
     if(evento && evento.estado==='pausado'){ this.showResult('bad', 'Evento pausado', 'Los ingresos están pausados por el administrador.'); speak('Entrada inválida'); beepAlert(); return; }
@@ -2505,19 +2572,27 @@ const VTApp = {
   identity: null,
   evento: null,
   misTickets: [],
+  eventosDisponibles: [],
   async loadUserList(){
     const {data} = await sb.from('vendedores').select('*').eq('tipo','vt');
     const sel = document.getElementById('vtUser');
     sel.innerHTML = (data||[]).map(u=>`<option value="${u.usuario}">${escapeHtml(u.usuario)} ${u.nombre?'- '+escapeHtml(u.nombre):''}</option>`).join('') || '<option value="">Sin usuarios VT creados por el admin</option>';
+    this.eventosDisponibles = await DB.eventosActivos();
+    const evSel = document.getElementById('vtEvento');
+    evSel.innerHTML = this.eventosDisponibles.length
+      ? this.eventosDisponibles.map(e=>`<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('')
+      : '<option value="">No hay eventos activos</option>';
   },
   async login(){
     const usuario = document.getElementById('vtUser').value;
     const pass = document.getElementById('vtPass').value;
+    const eventoId = document.getElementById('vtEvento').value;
     if(!usuario){ toast('No hay usuarios VT disponibles', true); return; }
+    if(!eventoId){ toast('Selecciona el evento en el que vas a vender', true); return; }
     const {data} = await sb.from('vendedores').select('*').eq('tipo','vt').eq('usuario', usuario).eq('password', pass).limit(1);
     if(!data || !data.length){ toast('Usuario o contraseña incorrectos', true); return; }
     this.identity = data[0];
-    this.evento = await DB.eventoActivo();
+    this.evento = this.eventosDisponibles.find(e=>e.id===eventoId) || await DB.eventoActivo();
     Auth.setRole('vt', this.identity, 'VT · '+usuario);
     renderEventPill(this.evento);
     Router.go('vt');
